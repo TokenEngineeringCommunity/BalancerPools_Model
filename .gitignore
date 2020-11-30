@@ -1,0 +1,6 @@
+__pycache__/
+static
+venv/
+.idea
+.ipynb_checkpoints/
+.vscode/
