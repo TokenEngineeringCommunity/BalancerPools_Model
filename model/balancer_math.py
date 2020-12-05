@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from . import balancer_constants
+from .balancer_constants import BONE
 
 
 class BalancerMath:
@@ -104,8 +105,8 @@ class BalancerMath:
         # That proportion is (1- weightTokenIn)
         # tokenAiAfterFee = tAi * (1 - (1-weightTi) * poolFee)
         normalized_weight = token_weight_in / total_weight
-        zaz = (1 - normalized_weight) * swap_fee
-        token_amount_in_after_fee = token_amount_in * (1 - zaz)
+        zaz = (BONE - normalized_weight) * swap_fee
+        token_amount_in_after_fee = token_amount_in * (BONE - zaz)
 
         new_token_balance_in = token_balance_in + token_amount_in_after_fee
         token_in_ratio = new_token_balance_in / token_balance_in
@@ -113,7 +114,7 @@ class BalancerMath:
         # new_pool_supply = (ratio_ti ^ weight_ti) * pool_supply
         pool_ratio = pow(token_in_ratio, normalized_weight)
         new_pool_supply = pool_ratio * pool_supply
-        pool_amount_out = new_pool_supply * pool_supply
+        pool_amount_out = new_pool_supply - pool_supply
         return pool_amount_out
 
     # **********************************************************************************************

@@ -86,35 +86,81 @@ class TestBalancerMath(unittest.TestCase):
 
         self.assertAlmostEqual(token_amount_in, params['ta_i'], 7)
 
-    @unittest.skip("need test data")
     def test_calc_pool_out_given_single_in(self):
-
         params = {
-            'ta_i': Decimal('888'),
-            'tb_i': Decimal('36'),
-            'tw_i': Decimal('13'),
-            'tw': Decimal('40'),
-            'p_s': Decimal('10000'),
-            'pa_o': Decimal('0.340112801426272844'),
-            'fee': Decimal('0.08')
+            'tb_i': Decimal('471000'),
+            'tw_i': Decimal('36'),
+            't_w': Decimal('40'),
+            'p_s': Decimal('100'),
+            'pa_o': Decimal('0.0019106349146009'),
+            'ta_i': Decimal('10'),
+            'fee': Decimal('0.001')
         }
-        pool_amount_out = BalancerMath.calc_pool_out_given_single_in(token_weight_in=params['tw_i'], token_balance_in=params['tb_i'],
-                                                                     pool_supply=params['p_s'], total_weight=params['t_w'],
-                                                                     token_amount_in=params['ta_i'], swap_fee=Decimal['fee'])
+        pool_amount_out = BalancerMath.calc_pool_out_given_single_in(token_balance_in=params['tb_i'],
+                                                                     token_weight_in=params['tw_i'],
+                                                                     pool_supply=params['p_s'],
+                                                                     total_weight=params['t_w'],
+                                                                     token_amount_in=params['ta_i'],
+                                                                     swap_fee=params['fee'])
 
         self.assertAlmostEqual(pool_amount_out, params['pa_o'], 7)
 
-    @unittest.skip("need test data")
     def test_calc_single_in_given_pool_out(self):
-        i = 2
+        params = {
+            'tb_i': Decimal('471000'),
+            'tw_i': Decimal('36'),
+            'p_s': Decimal('100'),
+            't_w': Decimal('40'),
+            'pa_o': Decimal('10'),
+            'ta_i': Decimal('52621.106362779467365737'),
+            'fee': Decimal('0.001')
+        }
+        token_amount_in = BalancerMath.calc_single_in_given_pool_out(token_balance_in=params['tb_i'],
+                                                                     token_weight_in=params['tw_i'],
+                                                                     pool_supply=params['p_s'],
+                                                                     total_weight=params['t_w'],
+                                                                     pool_amount_out=params['pa_o'],
+                                                                     swap_fee=params['fee'])
 
-    @unittest.skip("need test data")
+        self.assertAlmostEqual(token_amount_in, params['ta_i'], 5)
+
     def test_calc_single_out_given_pool_in(self):
-        i = 2
+        params = {
+            'tb_o': Decimal('471000'),
+            'tw_o': Decimal('36'),
+            'p_s': Decimal('100'),
+            't_w': Decimal('40'),
+            'pa_i': Decimal('10'),
+            'ta_o': Decimal('52028.342757248973119087'),
+            'fee': Decimal('0.001')
+        }
+        token_amount_out = BalancerMath.calc_single_out_given_pool_in(token_balance_out=params['tb_o'],
+                                                                      token_weight_out=params['tw_o'],
+                                                                      pool_supply=params['p_s'],
+                                                                      total_weight=params['t_w'],
+                                                                      pool_amount_in=params['pa_i'],
+                                                                      swap_fee=params['fee'])
 
-    @unittest.skip("need test data")
+        self.assertAlmostEqual(token_amount_out, params['ta_o'], 6)
+
     def test_calc_pool_in_given_single_out(self):
-        i = 2
+        params = {
+            'tb_o': Decimal('471000'),
+            'tw_o': Decimal('36'),
+            'p_s': Decimal('100'),
+            't_w': Decimal('40'),
+            'pa_i': Decimal('0.0019110211562761'),
+            'ta_o': Decimal('10'),
+            'fee': Decimal('0.001')
+        }
+        pool_amount_in = BalancerMath.calc_pool_in_given_single_out(token_balance_out=params['tb_o'],
+                                                                    token_weight_out=params['tw_o'],
+                                                                    pool_supply=params['p_s'],
+                                                                    total_weight=params['t_w'],
+                                                                    token_amount_out=params['ta_o'],
+                                                                    swap_fee=params['fee'])
+
+        self.assertAlmostEqual(pool_amount_in, params['pa_i'], 7)
 
 
 if __name__ == '__main__':
