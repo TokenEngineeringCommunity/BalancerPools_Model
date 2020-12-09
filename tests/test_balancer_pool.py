@@ -1,5 +1,6 @@
 import unittest
 from decimal import Decimal
+from unittest.case import skip
 
 from model.balancer_pool import BalancerPool
 
@@ -78,6 +79,7 @@ class TestBalancerPool(unittest.TestCase):
         self.assertAlmostEqual(result.token_amount_in, Decimal('4.004004004004004'))
         self.assertAlmostEqual(result.spot_price_after, Decimal('5.340008009344012012'))
 
+    @unittest.skip(reason='WIP')
     def test_join_swap_extern_amount_in(self):
         pool = BalancerPool()
         pool.bind('WETH', Decimal('4'), Decimal('10'))
