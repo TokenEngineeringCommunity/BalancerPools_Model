@@ -2,6 +2,7 @@ import unittest
 from decimal import Decimal
 from unittest.case import skip
 
+from model.balancer_constants import EXIT_FEE
 from model.balancer_pool import BalancerPool
 
 
@@ -35,9 +36,22 @@ class TestBalancerPool(unittest.TestCase):
         # NOTE: In balancer, user balances are pulled
         # assert.equal(22.5, fromWei(userWethBalance));
 
-    @unittest.skip("need test data")
     def test_exit_pool(self):
-        pass
+        pool = BalancerPool(initial_pool_supply=Decimal('135.224857816660897462'))
+        pool.bind('DAI', Decimal('63.139999999999999949'), Decimal('2'))
+        pool.bind('ETHIX', Decimal('613.124321062160530356'), Decimal('18'))
+        pool.set_swap_fee(Decimal('0.001'))
+        pool_amount_in = Decimal('5')
+        results = pool.exit_pool(pool_amount_in=pool_amount_in, min_amounts_out={
+          'DAI': Decimal('0'),
+          'ETHIX': Decimal('0')
+        })
+        print(results)
+        self.assertAlmostEqual(results['DAI'], Decimal('2.334629927494758091'))
+        self.assertAlmostEqual(results['ETHIX'], Decimal('22.670547817969981334'))
+        self.assertAlmostEqual(pool.pool_token_supply, Decimal('130.224857816660897462'))
+        self.assertAlmostEqual(results['exit_fee_pool_token'], pool_amount_in * EXIT_FEE)
+
 
     def test_get_spot_price(self):
         pool = BalancerPool()
@@ -79,21 +93,17 @@ class TestBalancerPool(unittest.TestCase):
         self.assertAlmostEqual(result.token_amount_in, Decimal('4.004004004004004'))
         self.assertAlmostEqual(result.spot_price_after, Decimal('5.340008009344012012'))
 
-    @unittest.skip(reason='WIP')
     def test_join_swap_extern_amount_in(self):
-        pool = BalancerPool()
-        pool.bind('WETH', Decimal('4'), Decimal('10'))
-        pool.bind('ETHIX', Decimal('12'), Decimal('10'))
+        pool = BalancerPool(initial_pool_supply=Decimal('132.915130375973322493'))
+        pool.bind('WETH', Decimal('53.139999999999999949'), Decimal('2'))
+        pool.bind('ETHIX', Decimal('613.124321062160530356'), Decimal('18'))
         swap_fee = Decimal('0.001')
         pool.set_swap_fee(swap_fee)
-        pool_ratio = Decimal('1.1')
-        # increase tbalance by 1.1^2 after swap fee
-        weth_norm = Decimal('10') / Decimal('10')
-        current_weth_balance = Decimal('4')
-        t_ai = (Decimal('1') / (Decimal('1') - swap_fee * (Decimal('1') - weth_norm))) * (current_weth_balance * pow(pool_ratio, (1 / weth_norm) - 1));
-        # TODO test limits and pool balances
+        t_ai = Decimal('10')
+
         p_ao = pool.join_swap_extern_amount_in(token_in='WETH', token_amount_in=t_ai, min_pool_amount_out=Decimal('0'))
-        self.assertAlmostEqual(p_ao, )
+        self.assertAlmostEqual(p_ao, Decimal('2.309727440687574969'))
+        self.assertAlmostEqual(pool.pool_token_supply, Decimal('135.224857816660897462'))
 
 if __name__ == '__main__':
     unittest.main()

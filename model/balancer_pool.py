@@ -25,11 +25,11 @@ class SwapOutResult:
 
 class BalancerPool(BalancerMath):
 
-    def __init__(self):
+    def __init__(self, initial_pool_supply: Decimal = INIT_POOL_SUPPLY):
         self._swap_fee = MIN_FEE
         self._records = {}  # NOTE: we are assuming python 3.6+ ordered dictionaries
         self.total_weight = Decimal('0')
-        self.pool_token_supply = INIT_POOL_SUPPLY
+        self.pool_token_supply = initial_pool_supply
 
     def get_total_denorm_weight(self):
         return self.total_weight
@@ -130,20 +130,22 @@ class BalancerPool(BalancerMath):
         exit_fee = pool_amount_in * EXIT_FEE
         pool_amount_in_afer_exit_fee = pool_amount_in - exit_fee
         ratio = pool_amount_in_afer_exit_fee / pool_total
-        # TODO user pool share stuff
-        # _pullPoolShare(msg.sender, poolAmountIn)
-        # _pushPoolShare(_factory, exitFee)
+
+        return_dict = {
+          "exit_fee_pool_token": exit_fee
+        }
         self._burn_pool_share(pool_amount_in_afer_exit_fee)
-        return_token_amounts = {}
+        
         for token in self._records:
             record = self._records[token]
             token_amount_out = ratio * record.balance
-            # TODO require(token_amount_out != 0, "ERR_MATH_APPROX")
+            if token_amount_out == 0:
+                raise Exception("ERR_MATH_APPROX")
             if token_amount_out < min_amounts_out[token]:
                 raise Exception("ERR_LIMIT_OUT")
             record.balance -= token_amount_out
-            return_token_amounts[token] = token_amount_out
-        return return_token_amounts
+            return_dict[token] = token_amount_out
+        return return_dict
     
     def swap_exact_amount_in(self, token_in: str, token_amount_in: Decimal, token_out: str, min_amount_out: Decimal, max_price: Decimal) -> SwapInResult:
         min_pool_amount_out = self._records[token_in]
@@ -255,6 +257,15 @@ class BalancerPool(BalancerMath):
 
         return SwapOutResult(token_amount_in=token_amount_in, spot_price_after=spot_price_after)
 
+   
+    # @notice Join by swapping a fixed amount of an external token in (must be present in the pool)
+    #        System calculates the pool token amount
+    # @notice CAN'T BE USED IN SMART POOLS (not finalized)
+    # @dev emits a LogJoin event
+    # @param tokenIn - which token we're transferring in
+    # @param tokenAmountIn - amount of deposit
+    # @param minPoolAmountOut - minimum of pool tokens to receive
+    # @return poolAmountOut - amount of pool tokens minted and transferred
     def join_swap_extern_amount_in(self, token_in: str, token_amount_in: Decimal, min_pool_amount_out: Decimal) -> Decimal:
         # require(_finalized, "ERR_NOT_FINALIZED");
         if not self._records[token_in].bound:
@@ -279,7 +290,7 @@ class BalancerPool(BalancerMath):
         in_record.balance += token_amount_in
 
         self._mint_pool_share(pool_amount_out)
-        # TODO user balance and share stuff
+        # NOTE user balance can be inferred from params (substract tai), pool out is already returning
         # _pushPoolShare(msg.sender, pool_amount_out);
         # _pullUnderlying(token_in, msg.sender, token_amount_in);
         return pool_amount_out
