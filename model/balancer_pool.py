@@ -1,5 +1,5 @@
 from collections import namedtuple
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_DOWN
 
 from model.balancer_constants import MIN_FEE, MAX_BOUND_TOKENS, INIT_POOL_SUPPLY, EXIT_FEE, MAX_IN_RATIO, MAX_OUT_RATIO
 from model.balancer_math import BalancerMath
@@ -294,3 +294,36 @@ class BalancerPool(BalancerMath):
         # _pushPoolShare(msg.sender, pool_amount_out);
         # _pullUnderlying(token_in, msg.sender, token_amount_in);
         return pool_amount_out
+
+    
+
+    def join_swap_pool_amount_out(self, token_in: str, pool_amount_out: Decimal, max_amount_in: Decimal) -> Decimal:
+        if not self._records[token_in].bound:
+            raise Exception("ERR_NOT_BOUND")
+        
+        in_record = self._records[token_in]
+
+        token_amount_in = self.calc_single_in_given_pool_out(
+          token_balance_in = in_record.balance,
+          token_weight_in = in_record.denorm,
+          pool_supply = self.pool_token_supply,
+          total_weight = self.total_weight,
+          pool_amount_out = pool_amount_out,
+          swap_fee = self._swap_fee)
+
+        if token_amount_in == 0:
+          raise Exception("ERR_MATH_APPROX")
+
+        if token_amount_in > max_amount_in:
+          raise Exception("ERR_LIMIT_IN")
+
+        if token_amount_in > in_record.balance * MAX_IN_RATIO:
+          raise Exception("ERR_MAX_IN_RATIO")
+        
+        in_record.balance = in_record.balance + token_amount_in
+        self._mint_pool_share(pool_amount_out)
+        # _pushPoolShare(msg.sender, poolAmountOut);
+        # _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
+
+        return token_amount_in
+        

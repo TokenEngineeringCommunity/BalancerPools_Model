@@ -105,5 +105,20 @@ class TestBalancerPool(unittest.TestCase):
         self.assertAlmostEqual(p_ao, Decimal('2.309727440687574969'))
         self.assertAlmostEqual(pool.pool_token_supply, Decimal('135.224857816660897462'))
 
+    def test_join_join_swap_pool_amount_out(self):
+        pool = BalancerPool(initial_pool_supply=Decimal('100'))
+        pool.bind('WETH', Decimal('4'), Decimal('10'))
+        pool.bind('DAI', Decimal('12'), Decimal('11'))
+        swap_fee = Decimal('0.001')
+        pool.set_swap_fee(swap_fee)
+        p_ao = Decimal('2.2')
+        t_ai = pool.join_swap_pool_amount_out(token_in='DAI', pool_amount_out=p_ao, max_amount_in=Decimal('1000'))
+        self.assertAlmostEqual(pool.pool_token_supply, Decimal('102.2'))
+        self.assertAlmostEqual(t_ai, Decimal('0.509279173873455029'))
+        self.assertAlmostEqual(pool.get_balance('DAI'), Decimal('12.509279173873455029'))
+        self.assertAlmostEqual(pool.get_balance('WETH'), Decimal('4'))
+
+
+
 if __name__ == '__main__':
     unittest.main()
