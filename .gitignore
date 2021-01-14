@@ -4,3 +4,5 @@ venv/
 .idea
 .ipynb_checkpoints/
 .vscode/
+*.csv
+*.json
