@@ -2,16 +2,18 @@ import csv
 import getopt
 import json
 import sys
-import pprint
 from collections import defaultdict
 
 ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
+
 def parse_token_tx(tx_dict: dict, row: dict):
     tx = tx_dict[row['Txhash']]
-    if tx.get(row['TokenSymbol']) is None:
-        tx[row['TokenSymbol']] = []
-    tx[row['TokenSymbol']].append({
+    if tx.get('tokens') is None:
+        tx['tokens'] = {}
+    if tx['tokens'].get(row['TokenSymbol']) is None:
+        tx['tokens'][row['TokenSymbol']] = []
+    tx['tokens'][row['TokenSymbol']].append({
         'from': row['From'],
         'to': row['To'],
         'value': row['Value'].replace(',', '')
@@ -19,30 +21,73 @@ def parse_token_tx(tx_dict: dict, row: dict):
     return tx_dict
 
 
+def format_join(tx_info: dict, pool_out: str, pool_address: str):
+    action = {
+        'type': 'join',
+        'pool_amount_out': pool_out,
+        'tokens_in': {}
+    }
+    for token in tx_info['tokens']:
+        if token == 'BPT':
+            continue
+        token_tx = tx_info['tokens'][token][0]
+        if token_tx['to'] == pool_address:
+            action['tokens_in'][token] = token_tx['value']
+    tx_info['action'] = action
+
+
+def format_exit(tx_info: dict, pool_in: str, pool_address: str):
+    action = {
+        'type': 'exit',
+        'pool_amount_in': pool_in,
+        'tokens_out': {}
+    }
+    for token in tx_info['tokens']:
+        if token == 'BPT':
+            continue
+        token_tx = tx_info['tokens'][token][0]
+        if token_tx['from'] == pool_address:
+            action['tokens_out'][token] = token_tx['value']
+    tx_info['action'] = action
+
+
+def format_swap(tx_info: dict, pool_address: str):
+    action = {
+        'type': 'swap'
+    }
+    for token in tx_info['tokens']:
+        if token == 'BPT':
+            continue
+        token_tx = tx_info['tokens'][token][0]
+        if token_tx['to'] == pool_address:
+            action['token_in'] = token
+            action['token_amount_in'] = token_tx['value']
+        elif token_tx['from'] == pool_address:
+            action['token_out'] = token
+            action['token_amount_out'] = token_tx['value']
+    tx_info['action'] = action
+
+
 def classify_txs(txs: dict, pool_address: str) -> dict:
+    index = 0
     for tx_hash in txs:
         tx_info = txs[tx_hash]
-        if tx_hash == '0x43fdd919d240ca7c69267219a53c0b7fdf805c27fc43f1c3133f0c369fcb1200':
-            print('heyehey')
-            pp = pprint.PrettyPrinter(indent=4)
-            pp.pprint(tx_info)
-        data_keys = tx_info.keys()
-        if 'BPT' in data_keys:
+        tx_info['index'] = index
+        index += 1
+        tokens = tx_info['tokens'].keys()
+        if 'BPT' in tokens:
             # exit or join
-            pool_token_operations = tx_info['BPT']
+            pool_token_operations = tx_info['tokens']['BPT']
             for bpt_tx in pool_token_operations:
                 if bpt_tx['from'] == pool_address and bpt_tx['to'] != ZERO_ADDRESS:
-                    tx_info['action_type'] = 'join'
-                    print('join')
+                    format_join(tx_info, bpt_tx['value'], pool_address)
                     break
                 elif bpt_tx['from'] == pool_address and bpt_tx['to'] == ZERO_ADDRESS:
-                    tx_info['action_type'] = 'exit'
-                    print('exit')
+                    format_exit(tx_info, bpt_tx['value'], pool_address)
                     break
         else:
-            tx_info['action_type'] = 'swap'
-        if tx_info.get('action_type') is None:
-            raise Exception('malformed tx')
+            format_swap(tx_info, pool_address)
+
     return txs
 
 
@@ -58,6 +103,7 @@ def get_grouped_txs(path: str) -> dict:
                 }
             parse_token_tx(result, row)
         return result
+
 
 def create_token_tx_file(input_file: str, output_file: str, pool_address: str):
     token_txs = classify_txs(txs=get_grouped_txs(input_file), pool_address=pool_address)
