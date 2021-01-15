@@ -68,7 +68,8 @@ def format_swap(tx_info: dict, pool_address: str):
     tx_info['action'] = action
 
 
-def classify_txs(txs: dict, pool_address: str) -> dict:
+def classify_txs(txs: dict, pool_address: str) -> []:
+    result_txs = []
     index = 0
     for tx_hash in txs:
         tx_info = txs[tx_hash]
@@ -87,8 +88,9 @@ def classify_txs(txs: dict, pool_address: str) -> dict:
                     break
         else:
             format_swap(tx_info, pool_address)
-
-    return txs
+        result_txs.append(tx_info)
+        result_txs[index-1]['tx_hash'] = tx_hash
+    return result_txs
 
 
 def get_grouped_txs(path: str) -> dict:
