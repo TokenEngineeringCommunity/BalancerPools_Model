@@ -16,7 +16,7 @@ def parse_token_tx(tx_dict: dict, row: dict):
     tx['tokens'][row['TokenSymbol']].append({
         'from': row['From'],
         'to': row['To'],
-        'value': row['Value'].replace(',', '')
+        'value': float(row['Value'].replace(',', ''))
     })
     return tx_dict
 

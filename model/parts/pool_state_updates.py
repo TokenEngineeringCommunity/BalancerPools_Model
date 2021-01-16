@@ -17,4 +17,9 @@ def p_action_decoder(params, step, history, current_state):
     action = df['action'][data_counter]
     return action
 
-def su_update_pool(params, step, history, current_state, input_):
+def s_swap_exact_amount_int(params, substep, state_history, previous_state, policy_input):
+    new_pool = previous_state['pool'].copy()
+
+    return 'pool', new_pool
+
+
