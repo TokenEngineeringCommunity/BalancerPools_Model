@@ -23,10 +23,14 @@ def parse_token_tx(tx_dict: dict, row: dict):
 
 def format_join(tx_info: dict, pool_out: str, pool_address: str):
     action = {
-        'type': 'join',
         'pool_amount_out': pool_out,
         'tokens_in': {}
     }
+    # 1 token other than the pool tokens means join_swap, else join with all tokens
+    if (len(tx_info['tokens'].keys()) - 1) == 1:
+        action['type'] = 'join_swap'
+    else:
+        action['type'] = 'join'
     for token in tx_info['tokens']:
         if token == 'BPT':
             continue
@@ -38,10 +42,14 @@ def format_join(tx_info: dict, pool_out: str, pool_address: str):
 
 def format_exit(tx_info: dict, pool_in: str, pool_address: str):
     action = {
-        'type': 'exit',
         'pool_amount_in': pool_in,
         'tokens_out': {}
     }
+    # 1 token other than the pool tokens means exit_swap, else join with all tokens
+    if (len(tx_info['tokens'].keys()) - 1) == 1:
+        action['type'] = 'exit_swap'
+    else:
+        action['type'] = 'exit'
     for token in tx_info['tokens']:
         if token == 'BPT':
             continue
