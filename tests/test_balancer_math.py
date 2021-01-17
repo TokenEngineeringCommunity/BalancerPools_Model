@@ -1,7 +1,7 @@
 import unittest
 from decimal import Decimal
 
-from model.balancer_math import BalancerMath
+from model.parts.balancer_math import BalancerMath
 
 
 class TestBalancerMath(unittest.TestCase):

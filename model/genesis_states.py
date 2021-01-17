@@ -8,23 +8,18 @@ initial_values = {
         'tokens': {
             'DAI': {
                 'weight': 20,
-                'balance': 10000000
+                'denorm_weight': 10,
+                'balance': 10000000,
+                'bound': True
             },
             'WETH': {
                 'weight': 80,
-                'balance': 67738.636173102396002749
+                'denorm_weight': 40,
+                'balance': 67738.636173102396002749,
+                'bound': True
             }
         },
         'generated_fees': 0.0,
         'pool_shares': 100.0
     },
-}
-
-
-### Parameters
-
-# These are the parameters of Uniswap that represent the fee collected on each swap. Notice that these are hardcoded in the Uniswap smart contracts, but we model them as parameters in order to be able to do A/B testing and parameter sweeping on them in the future.
-
-sys_params = {
-    'swap_fee': [0.1],
 }

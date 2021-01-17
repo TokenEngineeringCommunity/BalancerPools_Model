@@ -1,13 +1,14 @@
-from model.parts.system import p_action_decoder, su_update_pool
+from model.parts.system_policies import p_action_decoder
+from model.parts.pool_state_updates import s_update_pool
 
 partial_state_update_block = [
     {
-        # system.py
+        # system_policies.py
         'policies': {
             'user_action': p_action_decoder
         },
         'variables': {
-            'pool': su_update_pool,
+            'pool': s_update_pool,
         }
     }
 ]

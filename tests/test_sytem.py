@@ -1,8 +1,6 @@
 import unittest
-from decimal import Decimal
 
-from model.balancer_math import BalancerMath
-from model.parts.system import p_action_decoder
+from model.parts.system_policies import p_action_decoder
 
 
 class TestSystem(unittest.TestCase):

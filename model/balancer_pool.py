@@ -1,10 +1,8 @@
-from collections import namedtuple
-from decimal import Decimal, ROUND_HALF_DOWN
-import decimal
+from decimal import Decimal
 
-from model.balancer_constants import MAX_TOTAL_WEIGHT, MAX_WEIGHT, MIN_BALANCE, MIN_FEE, MAX_BOUND_TOKENS, INIT_POOL_SUPPLY, EXIT_FEE, MAX_IN_RATIO, \
+from model.parts.balancer_constants import MAX_TOTAL_WEIGHT, MAX_WEIGHT, MIN_BALANCE, MIN_FEE, MAX_BOUND_TOKENS, INIT_POOL_SUPPLY, EXIT_FEE, MAX_IN_RATIO, \
     MAX_OUT_RATIO, MIN_WEIGHT
-from model.balancer_math import BalancerMath
+from model.parts.balancer_math import BalancerMath
 from dataclasses import dataclass
 
 
@@ -200,7 +198,9 @@ class BalancerPool(BalancerMath):
             token_amount_in=token_amount_in,
             swap_fee=self._swap_fee
         )
-        # TODO require(token_amount_out >= min_amount_out, "ERR_LIMIT_OUT")
+
+        if token_amount_out < min_amount_out:
+            raise Exception('ERR_LIMIT_OUT')
 
         min_pool_amount_out.balance += token_amount_in
         out_record.balance -= token_amount_out

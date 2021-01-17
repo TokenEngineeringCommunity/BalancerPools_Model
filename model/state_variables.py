@@ -1,5 +1,5 @@
 # Dependences
-from .sys_params import initial_values
+from .genesis_states import initial_values
 
 
 ## Initial state object
