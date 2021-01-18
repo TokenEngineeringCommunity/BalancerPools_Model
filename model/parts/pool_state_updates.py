@@ -20,7 +20,7 @@ def s_swap_exact_amount_in(params, substep, state_history, previous_state, polic
     token_amount_in = Decimal(str(action['token_amount_in']))
     token_out = action['token_out']
     min_pool_amount_out = pool['tokens'][token_in]
-    # TODO plug param
+    # TODO fee as system param
     swap_fee = Decimal('0.1')
 
     if not min_pool_amount_out['bound']:

@@ -4,16 +4,13 @@ from cadCAD import configs
 from cadCAD.configuration import Experiment
 from cadCAD.engine import ExecutionMode, ExecutionContext, Executor
 
-from model.config import sim_config
-from model.partial_state_update_block import partial_state_update_block
-from model.genesis_states import *
 
-def run():
+def run(initial_state, partial_state_update_block, sim_configs):
     exp = Experiment()
     exp.append_configs(
-        initial_state=initial_values,
+        initial_state=initial_state,
         partial_state_update_blocks=partial_state_update_block,
-        sim_configs=sim_config
+        sim_configs=sim_configs
     )
 
     # Do not use multi_proc, breaks ipdb.set_trace()
@@ -27,8 +24,3 @@ def run():
 
     return df
 
-
-def postprocessing(df):
-
-
-    return df
