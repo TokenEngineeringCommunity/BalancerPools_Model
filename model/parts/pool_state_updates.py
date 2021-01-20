@@ -10,16 +10,17 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
         return s_swap_exact_amount_in(params, substep, state_history, previous_state, policy_input)
     elif policy_input['pool_update']['type'] == 'join':
         return s_join_pool(params, substep, state_history, previous_state, policy_input)
+    elif policy_input['pool_update']['type'] == 'join_swap':
+        return s_join_swap_extern_amount_in(params, substep, state_history, previous_state, policy_input)
     else:
         return 'pool', previous_state['pool'].copy()
 
 def s_join_pool(params, substep, state_history, previous_state, policy_input):
+    """
+    Join a pool by providing liquidity for all assets.
+    """
     pool = previous_state['pool']
-    # {'tokens': {'DAI': {'weight': 20, 'denorm_weight': 10, 'balance': 10396481.68700885, 'bound': True}, 'WETH': {'weight': 80, 'denorm_weight': 40, 'balance': 68684.50672373343, 'bound': True}}, 'generated_fees': 0.0, 'pool_shares': 100.0}
-
     action = policy_input['pool_update']
-    # {'pool_update': {'pool_amount_out': 2.9508254125206002e-05, 'tokens_in': {'DAI': 2.95487676566492, 'WETH': 0.019993601301505}, 'type': 'join'}}
-    # pool_amount_out = policy_input['pool_amount_out']
 
     # tokens_in is a suggestion. The real fixed input is pool_amount_out - how many pool shares does the user want.
     # tokens_in will then be recalculated and that value used instead.
@@ -40,7 +41,36 @@ def s_join_pool(params, substep, state_history, previous_state, policy_input):
     return 'pool', pool
 
 def s_join_swap_extern_amount_in(params, substep, state_history, previous_state, policy_input):
-    pass
+    """
+    Join a pool by providing liquidity for a single asset.
+    """
+    pool = previous_state['pool']
+    action = policy_input['pool_update']
+    tokens_in = action['tokens_in']
+    pool_amount_out_expected = action['pool_amount_out']
+    swap_fee = Decimal('0.1')
+
+    total_weight = 0
+    for asset in pool['tokens']:
+        total_weight += pool['tokens'][asset]['denorm_weight']
+
+    asset = list(tokens_in.keys())[0]
+    amount = tokens_in[asset]
+    pool_amount_out = BalancerMath.calc_pool_out_given_single_in(
+        token_balance_in=Decimal(pool['tokens'][asset]['balance']),
+        token_weight_in=pool['tokens'][asset]['denorm_weight'],
+        pool_supply=Decimal(pool['pool_shares']),
+        total_weight=Decimal(total_weight),
+        token_amount_in=Decimal(amount),
+        swap_fee=swap_fee
+    )
+    if pool_amount_out != pool_amount_out_expected:
+        print("WARNING: calculated that user should get {} pool shares but input specified that he should get {} pool shares instead".format(pool_amount_out, pool_amount_out_expected))
+
+    pool['pool_shares'] += float(pool_amount_out)
+    pool['tokens'][asset]['balance'] += float(amount)
+
+    return 'pool', pool
 
 def s_exit_swap_extern_amount_out(params, substep, state_history, previous_state, policy_input):
     pass
