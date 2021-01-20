@@ -12,7 +12,7 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
 
 
 def s_swap_exact_amount_in(params, substep, state_history, previous_state, policy_input):
-    pool = previous_state['pool'].copy()
+    pool = previous_state['pool']
 
     # Parse action params
     action = policy_input['pool_update']
