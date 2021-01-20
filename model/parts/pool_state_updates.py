@@ -35,7 +35,7 @@ def s_join_pool(params, substep, state_history, previous_state, policy_input):
         amount = ratio * pool['tokens'][asset]['balance']
         if amount != amount_expected:
             print("WARNING: calculated that user should get {} {} but input specified that he should get {} {} instead".format(amount, asset, amount_expected, asset))
-        pool['tokens'][asset]['balance'] += amount_expected
+        pool['tokens'][asset]['balance'] += amount
     pool['pool_shares'] += pool_amount_out
 
     return 'pool', pool
