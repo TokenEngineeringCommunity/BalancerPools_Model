@@ -1,7 +1,7 @@
 from cadCAD.configuration.utils import config_sim
 
 parameters = {
-    'swap_fee': [0.1]
+    'swap_fee': Decimal(0.1)
 }
 
 sim_config = config_sim(
