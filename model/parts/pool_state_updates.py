@@ -57,7 +57,7 @@ def s_join_swap_extern_amount_in(params, substep, state_history, previous_state,
     action = policy_input['pool_update']
     tokens_in = action['tokens_in']
     pool_amount_out_expected = action['pool_amount_out']
-    swap_fee = Decimal('0.1')
+    swap_fee = params[0]['swap_fee']
 
     total_weight = calculate_total_denorm_weight(pool)
 
@@ -85,7 +85,7 @@ def s_exit_swap_extern_amount_out(params, substep, state_history, previous_state
     """
     pool = previous_state['pool']
     action = policy_input['pool_update']
-    swap_fee = Decimal('0.1')
+    swap_fee = params[0]['swap_fee']
 
     asset = list(action["tokens_out"].keys())[0]
     # Check that all tokens_out are bound
@@ -128,10 +128,8 @@ def s_swap_exact_amount_in(params, substep, state_history, previous_state, polic
     token_amount_in = Decimal(str(action['token_amount_in']))
     token_out = action['token_out']
     min_pool_amount_out = pool['tokens'][token_in]
-    # TODO fee as system param
-    swap_fee = Decimal('0.1')
+    swap_fee = params[0]['swap_fee']
 
-    # ipdb.set_trace()
     if not min_pool_amount_out['bound']:
         raise Exception('ERR_NOT_BOUND')
     out_record = pool['tokens'][token_out]
