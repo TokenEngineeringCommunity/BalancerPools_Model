@@ -1,9 +1,16 @@
-import ipdb
 from decimal import Decimal
 
-from model.parts.balancer_constants import MAX_IN_RATIO
+import ipdb
+
+from model.parts.balancer_constants import MAX_IN_RATIO, MAX_OUT_RATIO, EXIT_FEE
 from model.parts.balancer_math import BalancerMath
 
+def calculate_total_denorm_weight(pool):
+    total_weight = 0
+    for asset in pool['tokens']:
+        if pool['tokens'][asset]['bound']:
+            total_weight += pool['tokens'][asset]['denorm_weight']
+    return total_weight
 
 def s_update_pool(params, substep, state_history, previous_state, policy_input):
     if policy_input['pool_update']['type'] == 'swap':
@@ -12,6 +19,8 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
         return s_join_pool(params, substep, state_history, previous_state, policy_input)
     elif policy_input['pool_update']['type'] == 'join_swap':
         return s_join_swap_extern_amount_in(params, substep, state_history, previous_state, policy_input)
+    elif policy_input['pool_update']['type'] == 'exit_swap':
+        return s_exit_swap_extern_amount_out(params, substep, state_history, previous_state, policy_input)
     else:
         return 'pool', previous_state['pool'].copy()
 
@@ -50,10 +59,7 @@ def s_join_swap_extern_amount_in(params, substep, state_history, previous_state,
     pool_amount_out_expected = action['pool_amount_out']
     swap_fee = Decimal('0.1')
 
-    total_weight = 0
-    for asset in pool['tokens']:
-        if pool['tokens'][asset]['bound']:
-            total_weight += pool['tokens'][asset]['denorm_weight']
+    total_weight = calculate_total_denorm_weight(pool)
 
     asset = list(tokens_in.keys())[0]
     amount = tokens_in[asset]
@@ -74,7 +80,44 @@ def s_join_swap_extern_amount_in(params, substep, state_history, previous_state,
     return 'pool', pool
 
 def s_exit_swap_extern_amount_out(params, substep, state_history, previous_state, policy_input):
-    pass
+    """
+    Exit a pool by withdrawing liquidity for a single asset.
+    """
+    pool = previous_state['pool']
+    action = policy_input['pool_update']
+    swap_fee = Decimal('0.1')
+
+    asset = list(action["tokens_out"].keys())[0]
+    # Check that all tokens_out are bound
+    if not pool['tokens'][asset]['bound']:
+        raise Exception("ERR_NOT_BOUND")
+    # Check that user is not trying to withdraw too many tokens
+    if action["tokens_out"][asset] > Decimal(pool['tokens'][asset]['balance']) * MAX_OUT_RATIO:
+        raise Exception("ERR_MAX_OUT_RATIO")
+
+    total_weight = calculate_total_denorm_weight(pool)
+
+    pool_amount_in = BalancerMath.calc_pool_in_given_single_out(
+        token_balance_out=Decimal(pool['tokens'][asset]['balance']),
+        token_weight_out=Decimal(pool['tokens'][asset]['denorm_weight']),
+        pool_supply=Decimal(pool['pool_shares']),
+        total_weight=total_weight,
+        token_amount_out=Decimal(action["tokens_out"][asset]),
+        swap_fee=swap_fee
+    )
+
+    if pool_amount_in == 0:
+        raise Exception("ERR_MATH_APPROX")
+    if pool_amount_in != action["pool_amount_in"]:
+        print("WARNING: calculated that pool should get {} pool shares but input specified that pool should get {} pool shares instead".format(pool_amount_in, action["pool_amount_in"]))
+
+    # Decrease asset (give it to user)
+    pool['tokens'][asset]['balance'] -= action["tokens_out"][asset]
+    # Burn the user's incoming pool shares - exit fee
+    exit_fee = pool_amount_in * EXIT_FEE
+    pool['pool_shares'] -= float(pool_amount_in - exit_fee)
+
+    return 'pool', pool
 
 def s_swap_exact_amount_in(params, substep, state_history, previous_state, policy_input):
     pool = previous_state['pool']

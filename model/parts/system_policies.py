@@ -14,7 +14,3 @@ def p_action_decoder(params, step, history, current_state):
     data_counter = prev_timestep + 1
     action = df['action'][data_counter]
     return { 'pool_update': action }
-
-
-
-
