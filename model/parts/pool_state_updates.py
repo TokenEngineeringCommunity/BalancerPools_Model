@@ -2,8 +2,24 @@ from decimal import Decimal
 
 import ipdb
 
-from model.parts.balancer_constants import MAX_IN_RATIO, MAX_OUT_RATIO, EXIT_FEE
+from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
+                                            MAX_OUT_RATIO)
 from model.parts.balancer_math import BalancerMath
+from model.parts.pool_state_updates import (s_exit_swap_extern_amount_out,
+                                            s_join_pool,
+                                            s_join_swap_extern_amount_in,
+                                            s_swap_exact_amount_in)
+
+routes = {
+    "swap": s_swap_exact_amount_in,
+    "join": s_join_pool,
+    "join_swap": s_join_swap_extern_amount_in,
+    "exit_swap": s_exit_swap_extern_amount_out
+}
+def s_update_pool(params, substep, state_history, previous_state, policy_input):
+    action_type = policy_input['pool_update']['type']
+    state_update_function = routes[action_type]
+    return state_update_function(params, substep, state_history, previous_state, policy_input)
 
 def calculate_total_denorm_weight(pool):
     total_weight = 0
@@ -11,18 +27,6 @@ def calculate_total_denorm_weight(pool):
         if pool['tokens'][asset]['bound']:
             total_weight += pool['tokens'][asset]['denorm_weight']
     return total_weight
-
-def s_update_pool(params, substep, state_history, previous_state, policy_input):
-    if policy_input['pool_update']['type'] == 'swap':
-        return s_swap_exact_amount_in(params, substep, state_history, previous_state, policy_input)
-    elif policy_input['pool_update']['type'] == 'join':
-        return s_join_pool(params, substep, state_history, previous_state, policy_input)
-    elif policy_input['pool_update']['type'] == 'join_swap':
-        return s_join_swap_extern_amount_in(params, substep, state_history, previous_state, policy_input)
-    elif policy_input['pool_update']['type'] == 'exit_swap':
-        return s_exit_swap_extern_amount_out(params, substep, state_history, previous_state, policy_input)
-    else:
-        return 'pool', previous_state['pool'].copy()
 
 def s_join_pool(params, substep, state_history, previous_state, policy_input):
     """
