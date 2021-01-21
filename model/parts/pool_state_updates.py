@@ -52,7 +52,8 @@ def s_join_swap_extern_amount_in(params, substep, state_history, previous_state,
 
     total_weight = 0
     for asset in pool['tokens']:
-        total_weight += pool['tokens'][asset]['denorm_weight']
+        if pool['tokens'][asset]['bound']:
+            total_weight += pool['tokens'][asset]['denorm_weight']
 
     asset = list(tokens_in.keys())[0]
     amount = tokens_in[asset]
