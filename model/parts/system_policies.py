@@ -1,6 +1,8 @@
 import pandas as pd
 
-df = pd.read_json('model/parts/actions-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
+action_df = pd.read_json('model/parts/actions-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
+weth_price_feed = pd.read_csv('model/parts/actions-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
+dai_price_feed = pd.read_json('model/parts/actions-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
 
 
 def p_action_decoder(params, step, history, current_state):
@@ -13,8 +15,14 @@ def p_action_decoder(params, step, history, current_state):
 
     # skip the first event, as they are already accounted for in the initial conditions of the system
     data_counter = prev_timestep + 1
-    tx = df.loc[df['timestep'] == data_counter]
+    tx = action_df.loc[action_df['timestep'] == data_counter]
     if tx.empty:
         return {'pool_update': None}
     else:
         return {'pool_update': tx['action']}
+
+
+def p_external_price_feed_decoder(params, step, history, current_state):
+
+    
+    return {'external_price_update': None}
