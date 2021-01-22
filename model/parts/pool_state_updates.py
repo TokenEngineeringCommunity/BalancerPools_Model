@@ -1,7 +1,5 @@
 from decimal import Decimal
 
-import ipdb
-
 from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
                                             MAX_OUT_RATIO)
 from model.parts.balancer_math import BalancerMath
@@ -16,10 +14,13 @@ routes = {
     "join_swap": s_join_swap_extern_amount_in,
     "exit_swap": s_exit_swap_extern_amount_out
 }
+
+
 def s_update_pool(params, substep, state_history, previous_state, policy_input):
     action_type = policy_input['pool_update']['type']
     state_update_function = routes[action_type]
     return state_update_function(params, substep, state_history, previous_state, policy_input)
+
 
 def calculate_total_denorm_weight(pool):
     total_weight = 0
@@ -27,6 +28,7 @@ def calculate_total_denorm_weight(pool):
         if pool['tokens'][asset]['bound']:
             total_weight += pool['tokens'][asset]['denorm_weight']
     return total_weight
+
 
 def s_join_pool(params, substep, state_history, previous_state, policy_input):
     """
@@ -47,11 +49,14 @@ def s_join_pool(params, substep, state_history, previous_state, policy_input):
     for asset, amount_expected in tokens_in.items():
         amount = ratio * pool['tokens'][asset]['balance']
         if amount != amount_expected:
-            print("WARNING: calculated that user should get {} {} but input specified that he should get {} {} instead".format(amount, asset, amount_expected, asset))
+            print("WARNING: calculated that user should get {} {} but input specified that he should get {} {} instead".format(amount, asset,
+                                                                                                                               amount_expected,
+                                                                                                                               asset))
         pool['tokens'][asset]['balance'] += amount
     pool['pool_shares'] += pool_amount_out
 
     return 'pool', pool
+
 
 def s_join_swap_extern_amount_in(params, substep, state_history, previous_state, policy_input):
     """
@@ -76,12 +81,14 @@ def s_join_swap_extern_amount_in(params, substep, state_history, previous_state,
         swap_fee=swap_fee
     )
     if pool_amount_out != pool_amount_out_expected:
-        print("WARNING: calculated that user should get {} pool shares but input specified that he should get {} pool shares instead".format(pool_amount_out, pool_amount_out_expected))
+        print("WARNING: calculated that user should get {} pool shares but input specified that he should get {} pool shares instead".format(
+            pool_amount_out, pool_amount_out_expected))
 
     pool['pool_shares'] += float(pool_amount_out)
     pool['tokens'][asset]['balance'] += float(amount)
 
     return 'pool', pool
+
 
 def s_exit_swap_extern_amount_out(params, substep, state_history, previous_state, policy_input):
     """
@@ -90,7 +97,6 @@ def s_exit_swap_extern_amount_out(params, substep, state_history, previous_state
     pool = previous_state['pool']
     action = policy_input['pool_update']
     swap_fee = params[0]['swap_fee']
-
     asset = list(action["tokens_out"].keys())[0]
     # Check that all tokens_out are bound
     if not pool['tokens'][asset]['bound']:
@@ -113,7 +119,8 @@ def s_exit_swap_extern_amount_out(params, substep, state_history, previous_state
     if pool_amount_in == 0:
         raise Exception("ERR_MATH_APPROX")
     if pool_amount_in != action["pool_amount_in"]:
-        print("WARNING: calculated that pool should get {} pool shares but input specified that pool should get {} pool shares instead".format(pool_amount_in, action["pool_amount_in"]))
+        print("WARNING: calculated that pool should get {} pool shares but input specified that pool should get {} pool shares instead".format(
+            pool_amount_in, action["pool_amount_in"]))
 
     # Decrease asset (give it to user)
     pool['tokens'][asset]['balance'] -= action["tokens_out"][asset]
@@ -122,6 +129,7 @@ def s_exit_swap_extern_amount_out(params, substep, state_history, previous_state
     pool['pool_shares'] -= float(pool_amount_in - exit_fee)
 
     return 'pool', pool
+
 
 def s_swap_exact_amount_in(params, substep, state_history, previous_state, policy_input):
     pool = previous_state['pool']

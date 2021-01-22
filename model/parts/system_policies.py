@@ -12,5 +12,8 @@ def p_action_decoder(params, step, history, current_state):
 
     # skip the first event, as they are already accounted for in the initial conditions of the system
     data_counter = prev_timestep + 1
-    action = df['action'][data_counter]
-    return { 'pool_update': action }
+    tx = df.loc[df['timestep'] == data_counter]
+    if tx.empty:
+        return {'pool_update': None}
+    else:
+        return {'pool_update': tx['action']}
