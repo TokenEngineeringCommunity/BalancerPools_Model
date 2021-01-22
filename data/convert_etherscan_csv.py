@@ -3,6 +3,7 @@ import getopt
 import json
 import sys
 from collections import defaultdict
+from datetime import datetime
 
 ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
@@ -114,9 +115,23 @@ def get_grouped_txs(path: str) -> dict:
             parse_token_tx(result, row)
         return result
 
+def calculate_timesteps(token_txs):
+    prev_tx_datetime = None
+    for idx, token_tx in enumerate(token_txs):
+        ts = int(token_tx['unixtimestamp'])
+        tx_datetime = datetime.utcfromtimestamp(ts)
+        if idx == 0:
+            token_tx['timestep'] = 0
+            prev_tx_datetime = tx_datetime
+        else:
+            timestep = (tx_datetime - prev_tx_datetime).total_seconds()
+            token_tx['timestep'] = int(timestep)
+
+
 
 def create_token_tx_file(input_file: str, output_file: str, pool_address: str):
     token_txs = classify_txs(txs=get_grouped_txs(input_file), pool_address=pool_address)
+    calculate_timesteps(token_txs)
     # Serializing json
     json_object = json.dumps(token_txs, indent=4)
 

@@ -1,4 +1,3 @@
-import pprint
 
 from pandas import DataFrame
 

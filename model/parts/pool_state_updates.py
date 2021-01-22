@@ -5,10 +5,12 @@ from model.parts.balancer_math import BalancerMath
 
 
 def s_update_pool(params, substep, state_history, previous_state, policy_input):
+    if policy_input['pool_update'] is None:
+        return 'pool', previous_state['pool']
     if policy_input['pool_update']['type'] == 'swap':
         return s_swap_exact_amount_in(params, substep, state_history, previous_state, policy_input)
     else:
-        return 'pool', previous_state['pool'].copy()
+        return 'pool', previous_state['pool']
 
 
 def s_swap_exact_amount_in(params, substep, state_history, previous_state, policy_input):
