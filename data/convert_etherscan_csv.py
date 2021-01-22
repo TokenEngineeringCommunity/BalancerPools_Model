@@ -132,11 +132,11 @@ def main(argv):
     try:
         opts, args = getopt.getopt(argv, "hi:o:p:", ["ifile=", "ofile=", "paddress="])
     except getopt.GetoptError:
-        print('convert_ethersca_csv.py -i <inputfile> -o <outputfile>  -p <pool_address>')
+        print('convert_etherscan_csv.py -i <inputfile> -o <outputfile>  -p <pool_address>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print('convert_ethersca_csv.py -i <inputfile> -o <outputfile> (optional) -p <pool_address>')
+            print('convert_etherscan_csv.py -i <inputfile> -o <outputfile> (optional) -p <pool_address>')
             sys.exit()
         elif opt in ("-p", "--paddress"):
             pool_address = arg.lower()

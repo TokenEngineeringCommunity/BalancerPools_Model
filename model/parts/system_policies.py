@@ -1,7 +1,6 @@
 import pandas as pd
 
-df = pd.read_json('model/parts/actions-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
-
+df = pd.read_json('./data/actions-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
 
 def p_action_decoder(params, step, history, current_state):
     '''
@@ -15,7 +14,3 @@ def p_action_decoder(params, step, history, current_state):
     data_counter = prev_timestep + 1
     action = df['action'][data_counter]
     return { 'pool_update': action }
-
-
-
-
