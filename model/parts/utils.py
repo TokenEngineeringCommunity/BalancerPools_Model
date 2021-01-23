@@ -17,6 +17,11 @@ def post_processing(df: DataFrame) -> DataFrame:
             append_to_list(sim_dict, f'token_{token.lower()}_denorm_weight', idx_pool['tokens'][token]['denorm_weight'])
         append_to_list(sim_dict, 'generated_fees', idx_pool['generated_fees'])
         append_to_list(sim_dict, 'pool_shares', idx_pool['pool_shares'])
+
+        idx_token_values = row['token_values']
+        for token in idx_token_values:
+            append_to_list(sim_dict, f'token_{token.lower()}_value', idx_token_values['tokens'])
+
         append_to_list(sim_dict, 'simulation', row['simulation'])
         append_to_list(sim_dict, 'subset', row['subset'])
         append_to_list(sim_dict, 'run', row['run'])

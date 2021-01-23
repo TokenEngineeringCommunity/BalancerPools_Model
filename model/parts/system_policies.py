@@ -1,5 +1,5 @@
-from datetime import timedelta, timezone
-from decimal import Decimal
+from datetime import timedelta, timezone, datetime
+import dateutil.parser
 
 import pandas as pd
 
@@ -23,7 +23,7 @@ def p_action_decoder(params, step, history, current_state):
     if tx.empty:
         return {'pool_update': None}
     else:
-        return {'pool_update': tx['action']}
+        return {'pool_update': tx['action'].values[0]}
 
 
 def p_external_price_feed_decoder(params, step, history, current_state):
@@ -33,13 +33,14 @@ def p_external_price_feed_decoder(params, step, history, current_state):
 
     # skip the first event, as they are already accounted for in the initial conditions of the system
     data_counter = prev_timestep + 1
+    print('timestep', data_counter)
     first_tx = action_df.loc[action_df['timestep'] == 0]
 
     first_date = pd.to_datetime(first_tx['datetime'])
     # first date + data_counter seconds = current_datetime
     current_datetime = first_date + timedelta(seconds=data_counter)
     curr_date = current_datetime[0].replace(tzinfo=timezone.utc)
-    print('curr_date', curr_date)
+    # print('curr_date', curr_date)
     formatted_curr_datetime = current_datetime.iloc[0].isoformat()
 
     price_feeds = [{
@@ -61,15 +62,17 @@ def p_external_price_feed_decoder(params, step, history, current_state):
         token = item['token']
         pricefeed = item['pricefeed']
         earlier_price_row = pricefeed.query(f"time <= '{formatted_curr_datetime}'").tail(1)
-        earlier_date = pd.to_datetime(earlier_price_row['time'])[0].replace(tzinfo=timezone.utc)
-        earlier_close = earlier_price_row['close'][0]
-        print('earlier_date', earlier_date)
-        print('earlier_close', earlier_close)
+        # print('earlier_price_row', earlier_price_row)
+        earlier_date = dateutil.parser.isoparse(earlier_price_row['time'].iloc[0]).replace(tzinfo=timezone.utc)
+        # print('earlier_date', earlier_date)
+        earlier_close = earlier_price_row['close'].iloc[0]
         later_price_row = pricefeed.query(f"time > '{formatted_curr_datetime}'").head(1)
-        later_open = later_price_row['open'][1]
-        later_date = pd.to_datetime(later_price_row['time'])[1].replace(tzinfo=timezone.utc)
-        print('later_open', later_open)
-        print('later_date', later_date)
+        # print('later_price_row', later_price_row)
+        later_open = later_price_row['open'].iloc[0]
+        later_date = dateutil.parser.isoparse(later_price_row['time'].iloc[0]).replace(tzinfo=timezone.utc)
+        # print('later_date', later_date)
+
+        #later_date = pd.to_datetime(later_price_row['time'])[1].replace(tzinfo=timezone.utc)
 
         price = (earlier_close * (later_date - curr_date) + later_open * (curr_date - earlier_date)) / (later_date - earlier_date)
         external_price_updates[token] = price
