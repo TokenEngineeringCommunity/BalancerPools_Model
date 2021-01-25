@@ -18,15 +18,14 @@ def post_processing(df: DataFrame) -> DataFrame:
         append_to_list(sim_dict, 'generated_fees', idx_pool['generated_fees'])
         append_to_list(sim_dict, 'pool_shares', idx_pool['pool_shares'])
 
-        idx_token_values = row['token_values']
-        for token in idx_token_values:
-            append_to_list(sim_dict, f'token_{token.lower()}_value', idx_token_values['tokens'])
+        idx_token_values = row.get('token_values')
+        if idx_token_values is not None:
+            for token in idx_token_values:
+                append_to_list(sim_dict, f'token_{token.lower()}_value', idx_token_values[token])
 
-        append_to_list(sim_dict, 'simulation', row['simulation'])
-        append_to_list(sim_dict, 'subset', row['subset'])
-        append_to_list(sim_dict, 'run', row['run'])
-        append_to_list(sim_dict, 'substep', row['substep'])
-        append_to_list(sim_dict, 'timestep', row['timestep'])
+        rest_keys = list(filter(lambda key: key != 'token_values' and key != 'pool', df.columns))
+        for key in rest_keys:
+            append_to_list(sim_dict, key, row[key])
 
     processed_df = DataFrame.from_dict(sim_dict)
     return processed_df

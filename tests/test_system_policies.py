@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pandas
 
-from model.parts.system_policies import p_action_decoder, p_external_price_feed_decoder
+from model.parts.system_policies import p_action_decoder
 
 '''
 mock_df = pandas.Dataframe([
@@ -85,35 +85,25 @@ mock_df = pandas.Dataframe([
 
 class TestSystemPolicies(unittest.TestCase):
 
-    @unittest.skip(reason='problems with df mocking')
-    @patch('model.parts.system_policies.pd.read_json')
-    def test_action_for_timestep(self, df_fake):
+    @unittest.skip(reason='skipping until refactor to better mock df')
+    # @patch('model.parts.system_policies.pd.read_json')
+    def test_action(self):
         # df_fake.return_value = mock_df
         result = p_action_decoder(params={}, step=11, history={}, current_state={'timestep': 352})
-        pool_update = result['pool_update']
-        action = pool_update.loc[1]
+        action = result['pool_update']
+        '''
         self.assertDictEqual(action, {
             "type": "swap",
             "token_in": "DAI",
             "token_amount_in": 11861.328308361,
             "token_out": "WETH",
-            "token_amount_out": 20.021734699893457
+            "token_amount_out": 20.021734699893457,
+            "datetime": "2020-12-09 10:32:00"
         })
+        '''
+        change_datetime = result['change_datetime']
 
-    @unittest.skip(reason='problems with df mocking')
-    @patch('model.parts.system_policies.pd.read_json')
-    def test_no_action_for_timestep(self, df_fake):
-        # df_fake.return_value = mock_df
-        result = p_action_decoder(params={}, step=11, history={}, current_state={'timestep': 11})
-        pool_update = result.get('pool_update')
-        self.assertIsNone(pool_update)
-
-    # @patch('model.parts.system_policies.pd.read_json')
-    def test_price_feed(self):
-        # df_fake.return_value = mock_df
-        result = p_external_price_feed_decoder(params={}, step=3, history={}, current_state={'timestep': 3})
-        print(result)
-        self.assertDictEqual(result, {'external_price_update': {'DAI': 1.0046349666666667, 'WETH': 596.7157333333333}})
+        self.assertEqual(change_datetime, '2020-12-09 10:32:00')
 
 
 if __name__ == '__main__':

@@ -97,8 +97,9 @@ def classify_txs(txs: dict, pool_address: str) -> []:
                     break
         else:
             format_swap(tx_info, pool_address)
+        tx_info['action']['datetime'] = tx_info['datetime']
         result_txs.append(tx_info)
-        result_txs[index-1]['tx_hash'] = tx_hash
+        result_txs[index - 1]['tx_hash'] = tx_hash
     return result_txs
 
 
@@ -115,23 +116,9 @@ def get_grouped_txs(path: str) -> dict:
             parse_token_tx(result, row)
         return result
 
-def calculate_timesteps(token_txs):
-    prev_tx_datetime = None
-    for idx, token_tx in enumerate(token_txs):
-        ts = int(token_tx['unixtimestamp'])
-        tx_datetime = datetime.utcfromtimestamp(ts)
-        if idx == 0:
-            token_tx['timestep'] = 0
-            prev_tx_datetime = tx_datetime
-        else:
-            timestep = (tx_datetime - prev_tx_datetime).total_seconds()
-            token_tx['timestep'] = int(timestep)
-
-
 
 def create_token_tx_file(input_file: str, output_file: str, pool_address: str):
     token_txs = classify_txs(txs=get_grouped_txs(input_file), pool_address=pool_address)
-    calculate_timesteps(token_txs)
     # Serializing json
     json_object = json.dumps(token_txs, indent=4)
 

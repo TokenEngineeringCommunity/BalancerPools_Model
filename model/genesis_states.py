@@ -22,6 +22,7 @@ initial_values = {
         'generated_fees': 0.0,
         'pool_shares': 100.0
     },
+    'change_datetime': '2020-12-07 13:34:14',
     # Close value of first item from COINBASE_<token>USD_5.csv
     'token_values': {
         'DAI': 1.004832,
