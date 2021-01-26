@@ -4,8 +4,6 @@ from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
                                             MAX_OUT_RATIO)
 from model.parts.balancer_math import BalancerMath
 
-import dateutil.parser
-
 import pandas as pd
 
 action_df = pd.read_json('model/parts/actions-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
