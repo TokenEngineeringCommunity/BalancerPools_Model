@@ -1,5 +1,7 @@
-from datetime import timedelta, timezone, datetime
 from decimal import Decimal
+import ipdb
+import pandas as pd
+
 from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
                                             MAX_OUT_RATIO)
 from model.parts.balancer_math import BalancerMath
@@ -8,7 +10,6 @@ import pandas as pd
 
 
 # action_df = pd.read_json('model/parts/actions_prices-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
-
 
 def calculate_total_denorm_weight(pool):
     total_weight = 0
@@ -23,7 +24,7 @@ class ActionDecoder:
 
     @classmethod
     def load_actions(cls, path_to_action_file: str) -> int:
-        ActionDecoder.action_df = pd.read_json(path_to_action_file)
+        ActionDecoder.action_df = pd.read_json(path_to_action_file).drop(0)
         return len(ActionDecoder.action_df)
 
     @staticmethod
@@ -33,13 +34,8 @@ class ActionDecoder:
         '''
         In this simplified model of Balancer, we have not modeled user behavior. Instead, we map events to actions.
         '''
-        prev_timestep = current_state['timestep']
-        if step > 1:
-            prev_timestep -= 1
-
-        # skip the first event, as they are already accounted for in the initial conditions of the system
-        data_counter = prev_timestep + 1
-        action = ActionDecoder.action_df['action'][data_counter]
+        idx = current_state['timestep'] + 1
+        action = ActionDecoder.action_df['action'][idx]
         if action['type'] == 'swap':
             answer = p_swap_exact_amount_in(params, step, history, current_state, action)
         elif action['type'] == 'join':
@@ -53,7 +49,6 @@ class ActionDecoder:
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
         return {'pool_update': answer, 'change_datetime_update': action['datetime'], 'action_type': action['type']}
-
 
 def p_swap_exact_amount_in(params, step, history, current_state, action):
     pool = current_state['pool']
@@ -110,6 +105,7 @@ def p_join_pool(params, step, history, current_state, action):
             print("WARNING: calculated that user should get {} {} but input specified that he should get {} {} instead".format(amount, asset,
                                                                                                                                amount_expected,
                                                                                                                                asset))
+
         pool['tokens'][asset]['balance'] += amount
     pool['pool_shares'] += pool_amount_out
 
@@ -138,8 +134,9 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, action):
         swap_fee=swap_fee
     )
     if pool_amount_out != pool_amount_out_expected:
-        print("WARNING: calculated that user should get {} pool shares but input specified that he should get {} pool shares instead".format(
-            pool_amount_out, pool_amount_out_expected))
+        print(
+            "WARNING: calculated that user should get {} pool shares but input specified that he should get {} pool shares instead".format(
+                pool_amount_out, pool_amount_out_expected))
 
     pool['pool_shares'] += float(pool_amount_out)
     pool['tokens'][asset]['balance'] += float(amount)
@@ -175,8 +172,9 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, action):
     if pool_amount_in == 0:
         raise Exception("ERR_MATH_APPROX")
     if pool_amount_in != action["pool_amount_in"]:
-        print("WARNING: calculated that pool should get {} pool shares but input specified that pool should get {} pool shares instead".format(
-            pool_amount_in, action["pool_amount_in"]))
+        print(
+            "WARNING: calculated that pool should get {} pool shares but input specified that pool should get {} pool shares instead".format(
+                pool_amount_in, action["pool_amount_in"]))
 
     # Decrease asset (give it to user)
     pool['tokens'][asset]['balance'] -= action["tokens_out"][asset]
