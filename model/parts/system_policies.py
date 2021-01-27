@@ -6,7 +6,7 @@ from model.parts.balancer_math import BalancerMath
 
 import pandas as pd
 
-action_df = pd.read_json('model/parts/actions-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
+action_df = pd.read_json('model/parts/actions_prices-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
 
 
 def calculate_total_denorm_weight(pool):
@@ -15,6 +15,7 @@ def calculate_total_denorm_weight(pool):
         if pool['tokens'][asset]['bound']:
             total_weight += pool['tokens'][asset]['denorm_weight']
     return total_weight
+
 
 def p_action_decoder(params, step, history, current_state):
     '''
@@ -35,9 +36,12 @@ def p_action_decoder(params, step, history, current_state):
         answer = p_join_swap_extern_amount_in(params, step, history, current_state, action)
     elif action['type'] == 'exit_swap':
         answer = p_exit_swap_extern_amount_out(params, step, history, current_state, action)
+    elif action['type'] == 'external_price_update':
+        return {'external_price_update': action['tokens'], 'change_datetime_update': action['datetime']}
     else:
         raise Exception("Action type {} unimplemented".format(action['type']))
     return {'pool_update': answer, 'change_datetime_update': action['datetime']}
+
 
 def p_swap_exact_amount_in(params, step, history, current_state, action):
     pool = current_state['pool']
@@ -73,6 +77,7 @@ def p_swap_exact_amount_in(params, step, history, current_state, action):
 
     return pool
 
+
 def p_join_pool(params, step, history, current_state, action):
     """
     Join a pool by providing liquidity for all assets.
@@ -92,12 +97,13 @@ def p_join_pool(params, step, history, current_state, action):
         amount = ratio * pool['tokens'][asset]['balance']
         if amount != amount_expected:
             print("WARNING: calculated that user should get {} {} but input specified that he should get {} {} instead".format(amount, asset,
-                                                                                                                                amount_expected,
-                                                                                                                                asset))
+                                                                                                                               amount_expected,
+                                                                                                                               asset))
         pool['tokens'][asset]['balance'] += amount
     pool['pool_shares'] += pool_amount_out
 
     return pool
+
 
 def p_join_swap_extern_amount_in(params, step, history, current_state, action):
     """
@@ -128,6 +134,7 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, action):
     pool['tokens'][asset]['balance'] += float(amount)
 
     return pool
+
 
 def p_exit_swap_extern_amount_out(params, step, history, current_state, action):
     """
