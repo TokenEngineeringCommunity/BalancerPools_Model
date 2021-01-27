@@ -6,7 +6,8 @@ from model.parts.balancer_math import BalancerMath
 
 import pandas as pd
 
-action_df = pd.read_json('model/parts/actions_prices-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
+
+# action_df = pd.read_json('model/parts/actions_prices-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
 
 
 def calculate_total_denorm_weight(pool):
@@ -17,35 +18,45 @@ def calculate_total_denorm_weight(pool):
     return total_weight
 
 
-def p_action_decoder(params, step, history, current_state):
-    '''
-    In this simplified model of Balancer, we have not modeled user behavior. Instead, we map events to actions.
-    '''
-    prev_timestep = current_state['timestep']
-    if step > 1:
-        prev_timestep -= 1
+class ActionDecoder:
+    action_df = None
 
-    # skip the first event, as they are already accounted for in the initial conditions of the system
-    data_counter = prev_timestep + 1
-    action = action_df['action'][data_counter]
-    if action['type'] == 'swap':
-        answer = p_swap_exact_amount_in(params, step, history, current_state, action)
-    elif action['type'] == 'join':
-        answer = p_join_pool(params, step, history, current_state, action)
-    elif action['type'] == 'join_swap':
-        answer = p_join_swap_extern_amount_in(params, step, history, current_state, action)
-    elif action['type'] == 'exit_swap':
-        answer = p_exit_swap_extern_amount_out(params, step, history, current_state, action)
-    elif action['type'] == 'external_price_update':
-        return {'external_price_update': action['tokens'], 'change_datetime_update': action['datetime']}
-    else:
-        raise Exception("Action type {} unimplemented".format(action['type']))
-    return {'pool_update': answer, 'change_datetime_update': action['datetime']}
+    @classmethod
+    def load_actions(cls, path_to_action_file: str) -> int:
+        ActionDecoder.action_df = pd.read_json(path_to_action_file)
+        return len(ActionDecoder.action_df)
+
+    @staticmethod
+    def p_action_decoder(params, step, history, current_state):
+        if ActionDecoder.action_df is None:
+            raise Exception('call ActionDecoder.load_actions(path_to_action.json) first')
+        '''
+        In this simplified model of Balancer, we have not modeled user behavior. Instead, we map events to actions.
+        '''
+        prev_timestep = current_state['timestep']
+        if step > 1:
+            prev_timestep -= 1
+
+        # skip the first event, as they are already accounted for in the initial conditions of the system
+        data_counter = prev_timestep + 1
+        action = ActionDecoder.action_df['action'][data_counter]
+        if action['type'] == 'swap':
+            answer = p_swap_exact_amount_in(params, step, history, current_state, action)
+        elif action['type'] == 'join':
+            answer = p_join_pool(params, step, history, current_state, action)
+        elif action['type'] == 'join_swap':
+            answer = p_join_swap_extern_amount_in(params, step, history, current_state, action)
+        elif action['type'] == 'exit_swap':
+            answer = p_exit_swap_extern_amount_out(params, step, history, current_state, action)
+        elif action['type'] == 'external_price_update':
+            return {'external_price_update': action['tokens'], 'change_datetime_update': action['datetime']}
+        else:
+            raise Exception("Action type {} unimplemented".format(action['type']))
+        return {'pool_update': answer, 'change_datetime_update': action['datetime']}
 
 
 def p_swap_exact_amount_in(params, step, history, current_state, action):
     pool = current_state['pool']
-
     # Parse action params
     token_in = action['token_in']
     token_amount_in = Decimal(str(action['token_amount_in']))
