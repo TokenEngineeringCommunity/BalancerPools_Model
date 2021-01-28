@@ -26,6 +26,5 @@ def post_processing(df: DataFrame) -> DataFrame:
         rest_keys = list(filter(lambda key: key != 'token_values' and key != 'pool', df.columns))
         for key in rest_keys:
             append_to_list(sim_dict, key, row[key])
-
     processed_df = DataFrame.from_dict(sim_dict)
     return processed_df
