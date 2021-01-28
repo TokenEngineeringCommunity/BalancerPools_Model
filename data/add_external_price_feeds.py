@@ -19,10 +19,13 @@ def convert_to_action_json(actions, output_file_path):
         result.append(dict_row)
     json_object = json.dumps(result, indent=4)
     # Writing to sample.json
+    print('Writing', output_file_path)
     with open(output_file_path, "w") as outfile:
         outfile.write(json_object)
+    print('Done!')
 
 def add_price_feeds_to_actions(price_feeds, action_file_path):
+    print('Reading', action_file_path)
     action_df = pd.read_json(action_file_path)
     action_df['datetime'] = pd.to_datetime(action_df['datetime'], utc=True)
     action_df = action_df.set_index('datetime')
@@ -36,6 +39,7 @@ def parse_price_feeds(price_feed_paths: [], token_symbols: []) -> []:
     result_df = None
     for idx, path in enumerate(price_feed_paths):
         token = token_symbols[idx]
+        print('Reading', path)
         parsed_price_feed = pd.read_csv(path, sep=';')
         parsed_price_feed[f'{token}'] = parsed_price_feed.apply(lambda row: (row.open + row.close) / 2, axis=1)
 
