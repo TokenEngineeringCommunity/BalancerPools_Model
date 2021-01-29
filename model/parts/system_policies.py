@@ -7,9 +7,6 @@ from model.parts.balancer_math import BalancerMath
 import pandas as pd
 
 
-# action_df = pd.read_json('model/parts/actions_prices-WETH-DAI-0x8b6e6e7b5b3801fed2cafd4b22b8a16c2f2db21a.json')
-
-
 def calculate_total_denorm_weight(pool):
     total_weight = 0
     for asset in pool['tokens']:
@@ -62,7 +59,7 @@ def p_swap_exact_amount_in(params, step, history, current_state, action):
     token_amount_in = Decimal(str(action['token_amount_in']))
     token_out = action['token_out']
     min_pool_amount_out = pool['tokens'][token_in]
-    swap_fee = params[0]['swap_fee']
+    swap_fee = pool['swap_fee']
 
     if not min_pool_amount_out['bound']:
         raise Exception('ERR_NOT_BOUND')
@@ -79,7 +76,7 @@ def p_swap_exact_amount_in(params, step, history, current_state, action):
         token_balance_out=Decimal(str(out_record['balance'])),
         token_weight_out=Decimal(str(out_record['denorm_weight'])),
         token_amount_in=token_amount_in,
-        swap_fee=swap_fee
+        swap_fee=Decimal(swap_fee)
     )
     pool_in_balance = float(Decimal(min_pool_amount_out['balance']) + Decimal(token_amount_in))
     min_pool_amount_out['balance'] = pool_in_balance
@@ -123,7 +120,7 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, action):
     pool = current_state['pool']
     tokens_in = action['tokens_in']
     pool_amount_out_expected = action['pool_amount_out']
-    swap_fee = params[0]['swap_fee']
+    swap_fee = pool['swap_fee']
 
     total_weight = calculate_total_denorm_weight(pool)
 
@@ -135,7 +132,7 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, action):
         pool_supply=Decimal(pool['pool_shares']),
         total_weight=Decimal(total_weight),
         token_amount_in=Decimal(amount),
-        swap_fee=swap_fee
+        swap_fee=Decimal(swap_fee)
     )
     if pool_amount_out != pool_amount_out_expected:
         print("WARNING: calculated that user should get {} pool shares but input specified that he should get {} pool shares instead".format(
@@ -152,7 +149,7 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, action):
     Exit a pool by withdrawing liquidity for a single asset.
     """
     pool = current_state['pool']
-    swap_fee = params[0]['swap_fee']
+    swap_fee = pool['swap_fee']
     asset = list(action["tokens_out"].keys())[0]
     # Check that all tokens_out are bound
     if not pool['tokens'][asset]['bound']:
@@ -169,7 +166,7 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, action):
         pool_supply=Decimal(pool['pool_shares']),
         total_weight=total_weight,
         token_amount_out=Decimal(action["tokens_out"][asset]),
-        swap_fee=swap_fee
+        swap_fee=Decimal(swap_fee)
     )
 
     if pool_amount_in == 0:

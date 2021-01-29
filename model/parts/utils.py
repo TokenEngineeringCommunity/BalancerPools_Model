@@ -23,7 +23,12 @@ def post_processing(df: DataFrame) -> DataFrame:
             for token in idx_token_prices:
                 append_to_list(sim_dict, f'token_{token.lower()}_price', idx_token_prices[token])
 
-        rest_keys = list(filter(lambda key: key != 'token_prices' and key != 'pool', df.columns))
+        idx_spot_prices = row.get('spot_prices')
+        if idx_spot_prices is not None:
+            for token in idx_spot_prices:
+                append_to_list(sim_dict, f'token_{token.lower()}_spot_price', idx_spot_prices[token])
+
+        rest_keys = list(filter(lambda key: key != 'token_prices' and key != 'pool' and key != 'spot_prices', df.columns))
         for key in rest_keys:
             append_to_list(sim_dict, key, row[key])
     processed_df = DataFrame.from_dict(sim_dict)
