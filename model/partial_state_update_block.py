@@ -16,7 +16,7 @@ def generate_partial_state_update_blocks(path_to_action_json: str) -> dict:
                 'variables': {
                     'pool': s_update_pool,
                     'change_datetime': s_update_change_datetime,
-                    'token_values': s_update_external_price_feeds,
+                    'token_prices': s_update_external_price_feeds,
                     'action_type': s_update_action_type
                 }
             }

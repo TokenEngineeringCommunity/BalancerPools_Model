@@ -25,7 +25,7 @@ initial_values = {
     'action_type': 'pool_creation',
     'change_datetime': '2020-12-07 13:34:14',
     # Close value of first item from COINBASE_<token>USD_5.csv
-    'token_values': {
+    'token_prices': {
         'DAI': 1.004832,
         'WETH': 596.75
     }
