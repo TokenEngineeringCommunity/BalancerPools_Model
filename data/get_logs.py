@@ -85,6 +85,34 @@ class BPoolLogCallParser:
         weis = Web3.toInt(hexstr=hex)
         return Web3.fromWei(weis, 'ether')
 
+
+class ERC20SymbolGetter:
+    def __init__(self, w3):
+        self.abi = [{
+            "constant": True,
+            "inputs": [],
+            "name": "symbol",
+            "outputs": [
+                {
+                    "name": "",
+                    "type": "string"
+                }
+            ],
+            "payable": False,
+            "stateMutability": "view",
+            "type": "function"
+        }]
+        self.w3 = w3
+        self.token_mapping = {}
+
+    def get_token_symbol(self, address: str) -> str:
+        if self.token_mapping.get(address):
+            return self.token_mapping.get(address)
+        contract = self.w3.eth.contract(address, abi=self.abi)
+        symbol = contract.functions.symbol().call()
+        self.token_mapping[address] = symbol
+        return symbol
+
 def main(argv):
     tx_hash = None
     node_url = None
@@ -108,6 +136,13 @@ def main(argv):
     receipt = w3.eth.getTransactionReceipt(tx_hash)
     input_data = log_call_parser.parse_from_receipt(receipt)
     print(input_data)
+    method_args = input_data['inputs']
+    method_arg = list(filter((lambda x: x['type'] == 'address'), method_args))[0]
+    token_address = method_arg['value']
+    print(token_address)
+    symbol_getter = ERC20SymbolGetter(w3)
+    print(f'Symbol for {token_address} is: {symbol_getter.get_token_symbol(token_address)}')
+
 
 
 if __name__ == "__main__":
