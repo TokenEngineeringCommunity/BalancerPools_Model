@@ -1,6 +1,8 @@
 
 from pandas import DataFrame
 
+# grab list of tokens (symbols) in the pool/result data frame
+#tlist = [] 
 
 def append_to_list(dictionary, key, value):
     if dictionary.get(key) is None:
@@ -31,5 +33,17 @@ def post_processing(df: DataFrame) -> DataFrame:
         rest_keys = list(filter(lambda key: key != 'token_prices' and key != 'pool' and key != 'spot_prices', df.columns))
         for key in rest_keys:
             append_to_list(sim_dict, key, row[key])
+
     processed_df = DataFrame.from_dict(sim_dict)
+
+     # create new column for token_k_values (value=balance*price)
+    for i in tlist:
+        df[f'token_{i}_value'] = df[f'token_{i}_balance']*df[f'token_{i}_price']
+
+    # create new column for TVL (sum of all token_k_values)
+    for i in tlist: 
+        a = df[f'token_{tlist[0]}_value'] #needs refactoring, so that we not only pick a+b but all tokens (up to 8) values
+        b = df[f'token_{tlist[1]}_value']
+        df['TVL_total_token_value'] = a + b
+
     return processed_df
