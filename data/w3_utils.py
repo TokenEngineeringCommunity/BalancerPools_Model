@@ -16,6 +16,7 @@ class BPoolLogCallParser:
         '0xb02f0b73': 'exitPool',
         '0x46ab38f1': 'exitswapPoolAmountIn',
         '0x02c96748': 'exitswapExternAmountOut',
+        '0xe4e1e538': 'bind'
     }
 
     def __init__(self):
@@ -25,19 +26,20 @@ class BPoolLogCallParser:
         file.close()
 
     def parse_from_receipt(self, receipt):
+        anon_events = []
         for log in receipt.logs:
             for idx, topic in enumerate(log.topics):
                 if idx == 0:
                     signature_candidate = Web3.toHex(topic[0:4])
                     method_name = BPoolLogCallParser.b_pool_method_signatures.get(signature_candidate)
                     if method_name is not None:
-                        print(method_name)
-                        return {
+                        anon_events.append({
                             'type': method_name,
                             'inputs': self.parse_method(method_name, signature_candidate, log.data)
-                        }
+                        })
+        return anon_events
 
-    def parse_method(self, method_name:str, signature: str, data: str):
+    def parse_method(self, method_name: str, signature: str, data: str):
         sig = signature.replace("0x", "")
         encoded_arguments = data.split(sig)[1]
         args = []
@@ -67,7 +69,7 @@ class BPoolLogCallParser:
 
     @staticmethod
     def strip_leading_0_add_0x(value: str):
-        value = value.lstrip('0')
+        value = value[-40:]
         return f'0x{value}'
 
     @staticmethod
@@ -113,6 +115,7 @@ class ERC20SymbolGetter:
         self.token_mapping[address] = symbol
         return symbol
 
+
 def main(argv):
     tx_hash = None
     node_url = None
@@ -120,12 +123,12 @@ def main(argv):
     try:
         opts, args = getopt.getopt(argv, "ht:n:", ["tx-hash=", "node-url="])
     except getopt.GetoptError:
-        print('get_logs.py -t -n')
+        print('w3_utils.py -t -n')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
             print(
-                'get_logs.py -n <node-url> -t <tx-hash>')
+                'w3_utils.py -n <node-url> -t <tx-hash>')
             sys.exit()
         elif opt in ("-t", "--tx-hash"):
             tx_hash = arg
@@ -142,7 +145,6 @@ def main(argv):
     print(token_address)
     symbol_getter = ERC20SymbolGetter(w3)
     print(f'Symbol for {token_address} is: {symbol_getter.get_token_symbol(token_address)}')
-
 
 
 if __name__ == "__main__":
