@@ -16,3 +16,4 @@ pexpect~=4.2.1
 pyparsing~=2.4.7
 setuptools~=39.0.1
 pandas~=1.1.0
+web3==5.15.0
