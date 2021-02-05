@@ -71,9 +71,6 @@ def query_save(client, pool_address: str, event_type: str, sql: str):
     df = query(client, sql)
     save_queries(pool_address, event_type, df)
 
-def transform_denorm(df: pd.DataFrame) -> dict:
-    return df.to_dict(orient="records")
-
 def produce_actions():
     if not os.path.exists(args.pool_address):
         new_sql = 'select * from blockchain-etl.ethereum_balancer.BFactory_event_LOG_NEW_POOL where pool="{}"'.format(args.pool_address)
@@ -115,6 +112,9 @@ def produce_actions():
         # Later we will drop the column "address" from denorms, because it is
         # just the pool address - it never changes.
         denorms_results.drop(["address"], axis=1, inplace=True)
+        # Using loc is slow. To avoid costly lookups by block_number, we convert
+        # swapFee lookups into a dict, and denorms too
+        fees_dict = fees_results.drop("address", axis=1).to_dict()["swapFee"]
 
         # Pandas, please don't truncate columns when I print them out
         pd.set_option('display.max_colwidth', None)
@@ -131,8 +131,8 @@ def produce_actions():
 
                 # Invariant data that exists parallel to these actions. Merge them
                 # into the same Action object as a "context" for convenience.
-                fee = fees_results.loc[block_number]["swapFee"]
-                denorms = transform_denorm(denorms_results.loc[block_number])
+                fee = fees_dict[block_number]
+                denorms = denorms_results.loc[block_number].to_dict(orient="records")
 
                 # convert block_number and swap_fee to string to painlessly
                 # convert to JSON later (numpy.int64 can't be JSON serialized)
