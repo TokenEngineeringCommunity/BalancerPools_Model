@@ -15,6 +15,7 @@ from get_logs import ERC20SymbolGetter
 
 parser = argparse.ArgumentParser(prog="pulldata", description="Ask Google Bigquery about a particular Balancer pool. Remember to set GOOGLE_APPLICATION_CREDENTIALS from https://cloud.google.com/docs/authentication/getting-started")
 parser.add_argument("pool_address")
+parser.add_argument("-p", "--pickles", help="Use pickles instead of JSON (faster)", dest="pickles", action="store_true", default=False)
 args = parser.parse_args()
 
 @dataclass_json
@@ -50,13 +51,15 @@ def save_queries(pool_address: str, event_type: str, df: pd.DataFrame):
     df.to_json("{}/{}.json".format(pool_address, event_type), orient="records")
 
 def pickle_queries(pool_address: str, event_type: str, df: pd.DataFrame):
-    print("Pickling to", pool_address)
-    with open("{}/{}.pickle".format(pool_address, event_type), 'wb') as f:
+    filename = "{}/{}.pickle".format(pool_address, event_type)
+    print("Pickling to", filename)
+    with open(filename, 'wb') as f:
         pickle.dump(df, f)
 
 def load_pickles(pool_address: str, event_type: str):
-    print("Unpickling from", pool_address)
-    with open("{}/{}.pickle".format(pool_address, event_type), 'rb') as f:
+    filename = "{}/{}.pickle".format(pool_address, event_type)
+    print("Unpickling from", filename)
+    with open(filename, 'rb') as f:
         return pickle.load(f)
 
 def read_query_results(pool_address: str, event_type: str) -> pd.DataFrame:
@@ -84,30 +87,24 @@ def produce_actions():
             denorms_sql = f.read().format(args.pool_address)
 
         client = bigquery.Client()
-        query_save(client, args.pool_address, "new", new_sql)
-        query_save(client, args.pool_address, "join", join_sql)
-        query_save(client, args.pool_address, "swap", swap_sql)
-        query_save(client, args.pool_address, "exit", exit_sql)
-        query_save(client, args.pool_address, "transfer", transfer_sql)
-        query_save(client, args.pool_address, "fees", fees_sql)
-        query_save(client, args.pool_address, "denorms", denorms_sql)
+        writer = query_save if not args.pickles else pickle_queries
+        writer(client, args.pool_address, "new", new_sql)
+        writer(client, args.pool_address, "join", join_sql)
+        writer(client, args.pool_address, "swap", swap_sql)
+        writer(client, args.pool_address, "exit", exit_sql)
+        writer(client, args.pool_address, "transfer", transfer_sql)
+        writer(client, args.pool_address, "fees", fees_sql)
+        writer(client, args.pool_address, "denorms", denorms_sql)
 
     else:
-        # new_results = read_query_results(args.pool_address, "new")
-        # join_results = read_query_results(args.pool_address, "join")
-        # swap_results = read_query_results(args.pool_address, "swap")
-        # exit_results = read_query_results(args.pool_address, "exit")
-        # transfer_results = read_query_results(args.pool_address, "transfer")
-        # fees_results = read_query_results(args.pool_address, "fees")
-        # denorms_results = read_query_results(args.pool_address, "denorms")
-
-        new_results = load_pickles(args.pool_address, "new")
-        join_results = load_pickles(args.pool_address, "join")
-        swap_results = load_pickles(args.pool_address, "swap")
-        exit_results = load_pickles(args.pool_address, "exit")
-        transfer_results = load_pickles(args.pool_address, "transfer")
-        fees_results = load_pickles(args.pool_address, "fees")
-        denorms_results = load_pickles(args.pool_address, "denorms")
+        reader = read_query_results if not args.pickles else load_pickles
+        new_results = reader(args.pool_address, "new")
+        join_results = reader(args.pool_address, "join")
+        swap_results = reader(args.pool_address, "swap")
+        exit_results = reader(args.pool_address, "exit")
+        transfer_results = reader(args.pool_address, "transfer")
+        fees_results = reader(args.pool_address, "fees")
+        denorms_results = reader(args.pool_address, "denorms")
 
         new_results["type"]="new"
         join_results["type"]="join"
