@@ -5,7 +5,7 @@ import pickle
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from web3 import Web3, HTTPProvider
-from data.w3_utils import ERC20SymbolGetter, BPoolLogCallParser
+from w3_utils import ERC20SymbolGetter, BPoolLogCallParser
 from marshmallow import fields
 from datetime import datetime
 
