@@ -1,4 +1,3 @@
-
 from pandas import DataFrame
 
 
@@ -6,6 +5,7 @@ def append_to_list(dictionary, key, value):
     if dictionary.get(key) is None:
         dictionary[key] = []
     dictionary[key].append(value)
+
 
 def post_processing(df: DataFrame) -> DataFrame:
     sim_dict = {}

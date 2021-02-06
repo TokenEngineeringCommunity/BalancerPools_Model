@@ -2,6 +2,7 @@ import getopt
 import json
 import sys
 
+from attr import dataclass
 from web3 import Web3, HTTPProvider
 from json import load
 
@@ -85,35 +86,73 @@ class BPoolLogCallParser:
         if hex == '':
             hex = '0'
         weis = Web3.toInt(hexstr=hex)
-        return Web3.fromWei(weis, 'ether')
+        return str(Web3.fromWei(weis, 'ether'))
 
 
-class ERC20SymbolGetter:
+class ERC20InfoReader:
+
     def __init__(self, w3):
-        self.abi = [{
-            "constant": True,
-            "inputs": [],
-            "name": "symbol",
-            "outputs": [
-                {
-                    "name": "",
-                    "type": "string"
-                }
-            ],
-            "payable": False,
-            "stateMutability": "view",
-            "type": "function"
-        }]
+        self.abi = [
+            {
+                "constant": True,
+                "inputs": [],
+                "name": "symbol",
+                "outputs": [
+                    {
+                        "name": "",
+                        "type": "string"
+                    }
+                ],
+                "payable": False,
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "constant": True,
+                "inputs": [],
+                "name": "decimals",
+                "outputs": [
+                    {
+                        "name": "",
+                        "type": "uint8"
+                    }
+                ],
+                "payable": False,
+                "stateMutability": "view",
+                "type": "function"
+            },
+        ]
         self.w3 = w3
         self.token_mapping = {}
 
     def get_token_symbol(self, address: str) -> str:
+        address = Web3.toChecksumAddress(address)
         if self.token_mapping.get(address):
-            return self.token_mapping.get(address)
+            if self.token_mapping[address].get('symbol'):
+                return self.token_mapping.get(address).get('symbol')
         contract = self.w3.eth.contract(address, abi=self.abi)
         symbol = contract.functions.symbol().call()
-        self.token_mapping[address] = symbol
+        symbol = symbol.decode("utf-8")
+        self.token_mapping[address]= {'symbol': symbol}
         return symbol
+
+    def get_token_decimals(self, address: str) -> int:
+        address = Web3.toChecksumAddress(address)
+        if self.token_mapping.get(address):
+            if self.token_mapping[address].get('decimals'):
+                return self.token_mapping.get(address).get('decimals')
+        contract = self.w3.eth.contract(address, abi=self.abi)
+        decimals = contract.functions.decimals().call()
+        print(decimals)
+        self.token_mapping[address]['decimals'] = decimals
+        return decimals
+
+    def normalize_token_units(self, address: str, amount: any) -> str:
+        decimals = self.get_token_decimals(address)
+        if decimals == 18:
+            return str(Web3.fromWei(amount, 'ether'))
+        else:
+            return str(amount // decimals)
 
 
 def main(argv):
@@ -143,7 +182,7 @@ def main(argv):
     method_arg = list(filter((lambda x: x['type'] == 'address'), method_args))[0]
     token_address = method_arg['value']
     print(token_address)
-    symbol_getter = ERC20SymbolGetter(w3)
+    symbol_getter = ERC20InfoReader(w3)
     print(f'Symbol for {token_address} is: {symbol_getter.get_token_symbol(token_address)}')
 
 
