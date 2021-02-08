@@ -117,14 +117,14 @@ def get_initial_token_distribution(new_results) -> dict:
 def get_initial_pool_share(transfer_results, tx_hash):
     initial_tx_transfers = transfer_results.loc[transfer_results['transaction_hash'] == tx_hash]
     minting = initial_tx_transfers.loc[initial_tx_transfers['src'] == '0x0000000000000000000000000000000000000000']
-    wei_amount = minting.iloc[0]['amt']
-    return pd.np.true_divide(wei_amount, 10 ** 18)
+    wei_amount = int(minting.iloc[0]['amt'])
+    return Web3.fromWei(wei_amount, 'ether')
 
 
 def produce_initial_state(new_results, fees_results, transfer_results):
     tokens = get_initial_token_distribution(new_results)
-    swap_fee_weis = fees_results.iloc[0]['swapFee']
-    swap_fee = pd.np.true_divide(swap_fee_weis, 10 ** 18)
+    swap_fee_weis = int(fees_results.iloc[0]['swapFee'])
+    swap_fee = Web3.fromWei(swap_fee_weis, 'ether')
     pool_shares = get_initial_pool_share(transfer_results, new_results.iloc[0]['transaction_hash'])
     creation_date = datetime.fromtimestamp(new_results.iloc[0]['block_timestamp'] / 1000).utcnow().isoformat()
     initial_states = {
