@@ -1,3 +1,4 @@
+import typing
 import argparse
 import json
 import os
@@ -71,7 +72,7 @@ def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
         pickle.dump(df, f)
 
 
-def load_pickles(pool_address: str, event_type: str):
+def load_pickles(pool_address: str, event_type: str) -> pd.DataFrame:
     filename = "{}/{}.pickle".format(pool_address, event_type)
     print("Unpickling from", filename)
     with open(filename, 'rb') as f:
@@ -143,20 +144,28 @@ def produce_initial_state(new_results, fees_results, transfer_results):
         json.dump(initial_states, f, indent="\t")
 
 
-def format_denorms(denorms: dict):
+def format_denorms(denorms: dict) -> typing.List[tuping.Dict]:
+    """
+    format_denorms expects the input to be
+    [{'token_address': '0x89045d0af6a12782ec6f701ee6698beaf17d0ea2', 'denorm': Decimal('1000000000000000000.000000000')}, {'token_address': '0xe3b446b242ce55610ad381a8e8164c680a70f131', 'denorm': Decimal('1000000000000000000.000000000')}...]
+    """
+    d = []
     for item in denorms:
-        item['token_address'] = Web3.toChecksumAddress(item['token_address'])
-        item['token_symbol'] = erc20_info_getter.get_token_symbol(item['token_address'])
-        item['denorm'] = str(Web3.fromWei(item['denorm'], 'ether'))
-
+        a = {
+            "token_address": Web3.toChecksumAddress(item['token_address']),
+            "token_symbol": erc20_info_getter.get_token_symbol(item['token_address']),
+            "denorm": str(Web3.fromWei(item['denorm'], 'ether')),
+        }
+        d.append(a)
+    return d
 
 def classify_pool_share_transfers(transfers: []) -> (str, str):
     pool_share_burnt = list(filter(lambda x: x['dst'] == ZERO_ADDRESS, transfers))
     if len(pool_share_burnt) > 0:
-        return 'pool_amount_in', str(Web3.fromWei(pool_share_burnt[0]['amt'], 'ether'))
+        return 'pool_amount_in', str(Web3.fromWei(int(pool_share_burnt[0]['amt']), 'ether'))
     pool_share_minted = list(filter(lambda x: x['src'] == ZERO_ADDRESS, transfers))
     if len(pool_share_minted) > 0:
-        return 'pool_amount_out', str(Web3.fromWei(pool_share_minted[0]['amt'], 'ether'))
+        return 'pool_amount_out', str(Web3.fromWei(int(pool_share_minted[0]['amt']), 'ether'))
     raise Exception('not pool share mint or burn', transfers)
 
 
@@ -242,13 +251,13 @@ def produce_actions():
 
     else:
         reader = read_query_results if not args.pickles else load_pickles
-        new_results = reader(args.pool_address, "new")
-        join_results = reader(args.pool_address, "join")
-        swap_results = reader(args.pool_address, "swap")
-        exit_results = reader(args.pool_address, "exit")
-        transfer_results = reader(args.pool_address, "transfer")
-        fees_results = reader(args.pool_address, "fees")
-        denorms_results = reader(args.pool_address, "denorms")
+        new_results = reader(args.pool_address, "new").set_index("block_number")
+        join_results = reader(args.pool_address, "join").set_index("block_number")
+        swap_results = reader(args.pool_address, "swap").set_index("block_number")
+        exit_results = reader(args.pool_address, "exit").set_index("block_number")
+        transfer_results = reader(args.pool_address, "transfer").set_index("block_number")
+        fees_results = reader(args.pool_address, "fees").set_index("block_number")
+        denorms_results = reader(args.pool_address, "denorms").set_index("block_number")
 
         new_results["type"] = "new"
         join_results["type"] = "join"
@@ -281,11 +290,10 @@ def produce_actions():
                 # Invariant data that exists parallel to these actions. Merge them
                 # into the same Action object as a "context" for convenience.
                 fee = fees_dict[block_number]
-                denorms = denorms_results.loc[block_number].to_dict(orient="records")
-                format_denorms(denorms)
+                denorms = format_denorms(denorms_results.loc[block_number].to_dict(orient="records"))
                 # convert block_number and swap_fee to string to painlessly
                 # convert to JSON later (numpy.int64 can't be JSON serialized)
-                a = Action(timestamp=datetime.fromtimestamp(ts / 1000), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
+                a = Action(timestamp=ts.to_pydatetime(), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
                            denorms=denorms, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
                 actions.append(a)
 
