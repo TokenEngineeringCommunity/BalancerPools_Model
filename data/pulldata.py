@@ -55,16 +55,18 @@ def query(client, sql: str) -> pd.DataFrame:
     return result
 
 
-def save_queries(pool_address: str, event_type: str, df: pd.DataFrame):
+def save_queries_json(pool_address: str, event_type: str, df: pd.DataFrame):
     print("Saving to", pool_address)
     if not os.path.exists(args.pool_address):
         os.mkdir(pool_address)
     df.to_json("{}/{}.json".format(pool_address, event_type), orient="records")
 
 
-def pickle_queries(pool_address: str, event_type: str, df: pd.DataFrame):
+def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
     filename = "{}/{}.pickle".format(pool_address, event_type)
     print("Pickling to", filename)
+    if not os.path.exists(args.pool_address):
+        os.mkdir(pool_address)
     with open(filename, 'wb') as f:
         pickle.dump(df, f)
 
@@ -82,9 +84,9 @@ def read_query_results(pool_address: str, event_type: str) -> pd.DataFrame:
     return pd.read_json(filename, orient="records").set_index("block_number")
 
 
-def query_save(client, pool_address: str, event_type: str, sql: str):
+def query_and_save(client, pool_address: str, event_type: str, sql: str, writer):
     df = query(client, sql)
-    save_queries(pool_address, event_type, df)
+    writer(pool_address, event_type, df)
 
 
 def get_initial_token_distribution(new_results) -> dict:
@@ -229,14 +231,14 @@ def produce_actions():
 
         client = bigquery.Client()
 
-        writer = query_save if not args.pickles else pickle_queries
-        writer(client, args.pool_address, "new", new_sql)
-        writer(client, args.pool_address, "join", join_sql)
-        writer(client, args.pool_address, "swap", swap_sql)
-        writer(client, args.pool_address, "exit", exit_sql)
-        writer(client, args.pool_address, "transfer", transfer_sql)
-        writer(client, args.pool_address, "fees", fees_sql)
-        writer(client, args.pool_address, "denorms", denorms_sql)
+        writer = save_queries_json if not args.pickles else save_queries_pickle
+        query_and_save(client, args.pool_address, "new", new_sql, writer)
+        query_and_save(client, args.pool_address, "join", join_sql, writer)
+        query_and_save(client, args.pool_address, "swap", swap_sql, writer)
+        query_and_save(client, args.pool_address, "exit", exit_sql, writer)
+        query_and_save(client, args.pool_address, "transfer", transfer_sql, writer)
+        query_and_save(client, args.pool_address, "fees", fees_sql, writer)
+        query_and_save(client, args.pool_address, "denorms", denorms_sql, writer)
 
     else:
         reader = read_query_results if not args.pickles else load_pickles
