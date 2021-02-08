@@ -19,7 +19,6 @@ from decimal import Decimal
 parser = argparse.ArgumentParser(prog="pulldata",
                                  description="Ask Google Bigquery about a particular Balancer pool. Remember to set GOOGLE_APPLICATION_CREDENTIALS from https://cloud.google.com/docs/authentication/getting-started")
 parser.add_argument("pool_address")
-parser.add_argument("-p", "--pickles", help="Use pickles instead of JSON (faster)", dest="pickles", action="store_true", default=False)
 args = parser.parse_args()
 w3 = Web3(Web3.HTTPProvider(os.environ['NODE_URL']))
 erc20_info_getter = ERC20InfoReader(w3)
@@ -55,14 +54,6 @@ def query(client, sql: str) -> pd.DataFrame:
     )
     return result
 
-
-def save_queries_json(pool_address: str, event_type: str, df: pd.DataFrame):
-    print("Saving to", pool_address)
-    if not os.path.exists(args.pool_address):
-        os.mkdir(pool_address)
-    df.to_json("{}/{}.json".format(pool_address, event_type), orient="records")
-
-
 def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
     filename = "{}/{}.pickle".format(pool_address, event_type)
     print("Pickling to", filename)
@@ -71,24 +62,15 @@ def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
     with open(filename, 'wb') as f:
         pickle.dump(df, f)
 
-
 def load_pickles(pool_address: str, event_type: str) -> pd.DataFrame:
     filename = "{}/{}.pickle".format(pool_address, event_type)
     print("Unpickling from", filename)
     with open(filename, 'rb') as f:
         return pickle.load(f)
 
-
-def read_query_results(pool_address: str, event_type: str) -> pd.DataFrame:
-    filename = "{}/{}.json".format(pool_address, event_type)
-    print("Reading", filename)
-    return pd.read_json(filename, orient="records").set_index("block_number")
-
-
 def query_and_save(client, pool_address: str, event_type: str, sql: str, writer):
     df = query(client, sql)
     writer(pool_address, event_type, df)
-
 
 def get_initial_token_distribution(new_results) -> dict:
     receipt = w3.eth.getTransactionReceipt(new_results.iloc[0]['transaction_hash'])
@@ -240,24 +222,22 @@ def produce_actions():
 
         client = bigquery.Client()
 
-        writer = save_queries_json if not args.pickles else save_queries_pickle
-        query_and_save(client, args.pool_address, "new", new_sql, writer)
-        query_and_save(client, args.pool_address, "join", join_sql, writer)
-        query_and_save(client, args.pool_address, "swap", swap_sql, writer)
-        query_and_save(client, args.pool_address, "exit", exit_sql, writer)
-        query_and_save(client, args.pool_address, "transfer", transfer_sql, writer)
-        query_and_save(client, args.pool_address, "fees", fees_sql, writer)
-        query_and_save(client, args.pool_address, "denorms", denorms_sql, writer)
+        query_and_save(client, args.pool_address, "new", new_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "join", join_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "swap", swap_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "exit", exit_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "transfer", transfer_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "fees", fees_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "denorms", denorms_sql, save_queries_pickle)
 
     else:
-        reader = read_query_results if not args.pickles else load_pickles
-        new_results = reader(args.pool_address, "new").set_index("block_number")
-        join_results = reader(args.pool_address, "join").set_index("block_number")
-        swap_results = reader(args.pool_address, "swap").set_index("block_number")
-        exit_results = reader(args.pool_address, "exit").set_index("block_number")
-        transfer_results = reader(args.pool_address, "transfer").set_index("block_number")
-        fees_results = reader(args.pool_address, "fees").set_index("block_number")
-        denorms_results = reader(args.pool_address, "denorms").set_index("block_number")
+        new_results = load_pickles(args.pool_address, "new").set_index("block_number")
+        join_results = load_pickles(args.pool_address, "join").set_index("block_number")
+        swap_results = load_pickles(args.pool_address, "swap").set_index("block_number")
+        exit_results = load_pickles(args.pool_address, "exit").set_index("block_number")
+        transfer_results = load_pickles(args.pool_address, "transfer").set_index("block_number")
+        fees_results = load_pickles(args.pool_address, "fees").set_index("block_number")
+        denorms_results = load_pickles(args.pool_address, "denorms").set_index("block_number")
 
         new_results["type"] = "new"
         join_results["type"] = "join"
