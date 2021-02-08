@@ -126,13 +126,13 @@ def produce_initial_state(new_results, fees_results, transfer_results):
     swap_fee_weis = int(fees_results.iloc[0]['swapFee'])
     swap_fee = Web3.fromWei(swap_fee_weis, 'ether')
     pool_shares = get_initial_pool_share(transfer_results, new_results.iloc[0]['transaction_hash'])
-    creation_date = datetime.fromtimestamp(new_results.iloc[0]['block_timestamp'] / 1000).utcnow().isoformat()
+    creation_date = new_results.iloc[0]['block_timestamp'].isoformat()
     initial_states = {
         'pool': {
             'tokens': tokens,
             'generated_fees': 0.0,
-            'pool_shares': pool_shares,
-            'swap_fee': swap_fee
+            'pool_shares': pool_shares.to_eng_string(),
+            'swap_fee': swap_fee.to_eng_string()
         },
         'action_type': 'pool_creation',
         'change_datetime': creation_date
@@ -326,7 +326,9 @@ from pstats import SortKey
 
 pr = cProfile.Profile()
 pr.enable()
-produce_actions()
+from ipdb import launch_ipdb_on_exception
+with launch_ipdb_on_exception():
+    produce_actions()
 pr.disable()
 s = io.StringIO()
 sortby = SortKey.CUMULATIVE
