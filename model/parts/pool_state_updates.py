@@ -10,15 +10,10 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
     return 'pool', pool
 
 
-def s_update_spot_prices(params, substep, state_history, previous_state, policy_input):
-    pool = policy_input.get('pool_update')
-    if pool is None:
-        return 'spot_prices', previous_state['spot_prices']
+def calculate_spot_prices(pool: dict, ref_token: str, ):
     swap_fee = pool['swap_fee']
-    ref_token = params[0]['spot_price_reference']
     balance_out = pool['tokens'][ref_token]['balance']
     weight_out = pool['tokens'][ref_token]['weight']
-
     spot_prices = {}
     for token in pool['tokens']:
         if token == ref_token:
@@ -32,5 +27,16 @@ def s_update_spot_prices(params, substep, state_history, previous_state, policy_
                                              token_weight_out=Decimal(weight_out),
                                              swap_fee=Decimal(swap_fee))
         spot_prices[token] = price
+    return spot_prices
+
+
+def s_update_spot_prices(params, substep, state_history, previous_state, policy_input):
+    pool = policy_input.get('pool_update')
+    if pool is None:
+        return 'spot_prices', previous_state['spot_prices']
+
+    ref_token = params[0]['spot_price_reference']
+
+    spot_prices = calculate_spot_prices(pool, ref_token)
 
     return 'spot_prices', spot_prices

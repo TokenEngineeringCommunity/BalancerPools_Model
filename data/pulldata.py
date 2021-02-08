@@ -5,9 +5,10 @@ import pickle
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from web3 import Web3, HTTPProvider
-from w3_utils import ERC20InfoReader, BPoolLogCallParser
+from w3_utils import ERC20InfoReader, BPoolLogCallParser, TransactionReceiptGetter
 from marshmallow import fields
 from datetime import datetime
+import time
 
 import pandas as pd
 from dataclasses_json import dataclass_json, config
@@ -21,7 +22,8 @@ parser.add_argument("-p", "--pickles", help="Use pickles instead of JSON (faster
 args = parser.parse_args()
 w3 = Web3(Web3.HTTPProvider(os.environ['NODE_URL']))
 erc20_info_getter = ERC20InfoReader(w3)
-log_call_parser = BPoolLogCallParser()
+log_call_parser = BPoolLogCallParser(erc20_info_getter)
+receipt_getter = TransactionReceiptGetter(w3, args.pool_address)
 ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 
@@ -87,28 +89,26 @@ def query_save(client, pool_address: str, event_type: str, sql: str):
 
 def get_initial_token_distribution(new_results) -> dict:
     receipt = w3.eth.getTransactionReceipt(new_results.iloc[0]['transaction_hash'])
-    log_call_parser = BPoolLogCallParser()
     events = log_call_parser.parse_from_receipt(receipt)
     bind_events = list(filter(lambda x: x['type'] == 'bind', events))
     tokens = {}
-    total_denorm_weight = 0
+    total_denorm_weight = Decimal('0.0')
     for event in bind_events:
         inputs = event['inputs']
-        token_address = list(filter(lambda x: x['name'] == 'token', inputs))[0]['value']
+        token_address = inputs['token']
         token_symbol = erc20_info_getter.get_token_symbol(token_address)
-        denorm = list(filter(lambda x: x['name'] == 'denorm', inputs))[0]['value']
+        denorm = Decimal(inputs['denorm'])
         total_denorm_weight += denorm
-        balance = list(filter(lambda x: x['name'] == 'balance', inputs))[0]['value']
 
         tokens[token_symbol] = {
             'weight': None,
-            'denorm_weight': denorm,
-            'balance': balance,
+            'denorm_weight': str(denorm),
+            'balance': inputs['balance'],
             'bound': True
         }
     for (key, token) in tokens.items():
-        denorm = token['denorm_weight']
-        token['weight'] = denorm / total_denorm_weight
+        denorm = Decimal(token['denorm_weight'])
+        token['weight'] = str(denorm / total_denorm_weight)
     return tokens
 
 
@@ -125,7 +125,6 @@ def produce_initial_state(new_results, fees_results, transfer_results):
     swap_fee = pd.np.true_divide(swap_fee_weis, 10 ** 18)
     pool_shares = get_initial_pool_share(transfer_results, new_results.iloc[0]['transaction_hash'])
     creation_date = datetime.fromtimestamp(new_results.iloc[0]['block_timestamp'] / 1000).utcnow().isoformat()
-
     initial_states = {
         'pool': {
             'tokens': tokens,
@@ -136,8 +135,10 @@ def produce_initial_state(new_results, fees_results, transfer_results):
         'action_type': 'pool_creation',
         'change_datetime': creation_date
     }
-
-    print(initial_states)
+    initial_states_filename = args.pool_address + "-initial_pool_states.json"
+    print("saving to", initial_states_filename)
+    with open(initial_states_filename, 'w') as f:
+        json.dump(initial_states, f, indent="\t")
 
 
 def format_denorms(denorms: dict):
@@ -145,6 +146,69 @@ def format_denorms(denorms: dict):
         item['token_address'] = Web3.toChecksumAddress(item['token_address'])
         item['token_symbol'] = erc20_info_getter.get_token_symbol(item['token_address'])
         item['denorm'] = str(Web3.fromWei(item['denorm'], 'ether'))
+
+
+def classify_pool_share_transfers(transfers: []) -> (str, str):
+    pool_share_burnt = list(filter(lambda x: x['dst'] == ZERO_ADDRESS, transfers))
+    if len(pool_share_burnt) > 0:
+        return 'pool_amount_in', str(Web3.fromWei(pool_share_burnt[0]['amt'], 'ether'))
+    pool_share_minted = list(filter(lambda x: x['src'] == ZERO_ADDRESS, transfers))
+    if len(pool_share_minted) > 0:
+        return 'pool_amount_out', str(Web3.fromWei(pool_share_minted[0]['amt'], 'ether'))
+    raise Exception('not pool share mint or burn', transfers)
+
+
+def map_token_amounts(txs: [], address_key: str, amount_key: str, output_key: str):
+    def map_tx(x):
+        mapped = {}
+        symbol = erc20_info_getter.get_token_symbol(x[address_key])
+        mapped[symbol] = erc20_info_getter.normalize_token_units(x[address_key], x[amount_key])
+        return mapped
+
+    mapped_joins = list(map(map_tx, txs))
+    return output_key, mapped_joins
+
+
+def classify_actions(group):
+    action = {}
+    transfers = list(filter(lambda x: x['action_type'] == 'transfer', group))
+    if len(transfers) > 0:
+        key, value = classify_pool_share_transfers(transfers[0]['action'])
+        action[key] = value
+    joins = list(filter(lambda x: x['action_type'] == 'join', group))
+    if len(joins) > 0:
+        key, value = map_token_amounts(joins[0]['action'], address_key='tokenIn', amount_key='tokenAmountIn', output_key='tokens_in')
+        action[key] = value
+    exits = list(filter(lambda x: x['action_type'] == 'exit', group))
+    if len(exits) > 0:
+        key, value = map_token_amounts(exits[0]['action'], address_key='tokenOut', amount_key='tokenAmountOut', output_key='tokens_out')
+        action[key] = value
+    swaps = list(filter(lambda x: x['action_type'] == 'swap', group))
+    if len(swaps) > 0:
+        swap_result = {}
+        in_key, in_value = map_token_amounts(swaps[0]['action'], address_key='tokenIn', amount_key='tokenAmountIn', output_key='tokens_in')
+        swap_result[in_key] = in_value
+        out_key, out_value = map_token_amounts(swaps[0]['action'], address_key='tokenOut', amount_key='tokenAmountOut',
+                                               output_key='tokens_out')
+        swap_result[out_key] = out_value
+        action['swap'] = swap_result
+    return action
+
+
+def merge_actions(group):
+    merged_action = {
+        "timestamp": group[0]['timestamp'],
+        "tx_hash": group[0]['tx_hash'],
+        "block_number": group[0]['block_number'],
+        "swap_fee": str(Web3.fromWei(int(group[0]['swap_fee']), 'ether')),
+        "denorms": group[0]['denorms']
+    }
+    time.sleep(0.1)
+    receipt = w3.eth.getTransactionReceipt(merged_action['tx_hash'])
+    input_data = log_call_parser.parse_from_receipt(receipt)
+    merged_action['contract_call'] = input_data
+    merged_action['action'] = classify_actions(group)
+    return merged_action
 
 
 def produce_actions():
@@ -200,6 +264,8 @@ def produce_actions():
         # Pandas, please don't truncate columns when I print them out
         pd.set_option('display.max_colwidth', None)
 
+        produce_initial_state(new_results, fees_results, transfer_results)
+
         def turn_events_into_actions(events_list):
             actions = []
             grouped = events_list.groupby("transaction_hash")
@@ -238,66 +304,8 @@ def produce_actions():
             grouped_by_tx_actions[tx_hash].append(action.to_dict())
         grouped_actions = list(map(lambda key: grouped_by_tx_actions[key], grouped_by_tx_actions))
 
-        def classify_pool_share_transfers(transfers: []) -> (str, str):
-            pool_share_burnt = list(filter(lambda x: x['dst'] == ZERO_ADDRESS, transfers))
-            if len(pool_share_burnt) > 0:
-                return 'pool_amount_in', str(Web3.fromWei(pool_share_burnt[0]['amt'], 'ether'))
-            pool_share_minted = list(filter(lambda x: x['src'] == ZERO_ADDRESS, transfers))
-            if len(pool_share_minted) > 0:
-                return 'pool_amount_out', str(Web3.fromWei(pool_share_minted[0]['amt'], 'ether'))
-            raise Exception('not pool share mint or burn', transfers)
-
-        def map_token_amounts(txs: [], address_key: str, amount_key: str, output_key: str):
-
-            def map_tx(x):
-                mapped = {}
-                symbol = erc20_info_getter.get_token_symbol(x[address_key])
-                mapped[symbol] = erc20_info_getter.normalize_token_units(x[address_key], x[amount_key])
-                return mapped
-
-            mapped_joins = list(map(map_tx, txs))
-            return output_key, mapped_joins
-
-        def classify_actions(group):
-            action = {}
-            transfers = list(filter(lambda x: x['action_type'] == 'transfer', group))
-            if len(transfers) > 0:
-                key, value = classify_pool_share_transfers(transfers[0]['action'])
-                action[key] = value
-            joins = list(filter(lambda x: x['action_type'] == 'join', group))
-            if len(joins) > 0:
-                key, value = map_token_amounts(joins[0]['action'], address_key='tokenIn', amount_key='tokenAmountIn', output_key='tokens_in')
-                action[key] = value
-            exits = list(filter(lambda x: x['action_type'] == 'exit', group))
-            if len(exits) > 0:
-                key, value = map_token_amounts(exits[0]['action'], address_key='tokenOut', amount_key='tokenAmountOut', output_key='tokens_out')
-                action[key] = value
-            swaps = list(filter(lambda x: x['action_type'] == 'swap', group))
-            if len(swaps) > 0:
-                swap_result = {}
-                in_key, in_value = map_token_amounts(swaps[0]['action'], address_key='tokenIn', amount_key='tokenAmountIn', output_key='tokens_in')
-                swap_result[in_key] = in_value
-                out_key, out_value = map_token_amounts(swaps[0]['action'], address_key='tokenOut', amount_key='tokenAmountOut', output_key='tokens_out')
-                swap_result[out_key] = out_value
-                action['swap'] = swap_result
-            return action
-
-        def merge_actions(group):
-            merged_action = {
-                "timestamp": group[0]['timestamp'],
-                "tx_hash": group[0]['tx_hash'],
-                "block_number": group[0]['block_number'],
-                "swap_fee": str(Web3.fromWei(int(group[0]['swap_fee']), 'ether')),
-                "denorms": group[0]['denorms']
-            }
-            receipt = w3.eth.getTransactionReceipt(merged_action['tx_hash'])
-            input_data = log_call_parser.parse_from_receipt(receipt)
-            merged_action['contract_call'] = input_data
-            merged_action['action'] = classify_actions(group)
-            return merged_action
-
         # Filter out pool share transfer
-        grouped_actions = list(filter(lambda actions: not (len(actions) == 1 and actions[0]['action_type'] == 'transfer'), grouped_actions))
+        grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0]['action_type'] == 'transfer'), grouped_actions))
 
         # Combine events
         grouped_actions = list(map(merge_actions, grouped_actions))
