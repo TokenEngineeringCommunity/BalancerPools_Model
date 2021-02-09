@@ -1,3 +1,4 @@
+import typing
 import argparse
 import json
 import os
@@ -18,7 +19,6 @@ from decimal import Decimal
 parser = argparse.ArgumentParser(prog="pulldata",
                                  description="Ask Google Bigquery about a particular Balancer pool. Remember to set GOOGLE_APPLICATION_CREDENTIALS from https://cloud.google.com/docs/authentication/getting-started")
 parser.add_argument("pool_address")
-parser.add_argument("-p", "--pickles", help="Use pickles instead of JSON (faster)", dest="pickles", action="store_true", default=False)
 args = parser.parse_args()
 w3 = Web3(Web3.HTTPProvider(os.environ['NODE_URL']))
 erc20_info_getter = ERC20InfoReader(w3)
@@ -54,38 +54,23 @@ def query(client, sql: str) -> pd.DataFrame:
     )
     return result
 
-
-def save_queries(pool_address: str, event_type: str, df: pd.DataFrame):
-    print("Saving to", pool_address)
-    if not os.path.exists(args.pool_address):
-        os.mkdir(pool_address)
-    df.to_json("{}/{}.json".format(pool_address, event_type), orient="records")
-
-
-def pickle_queries(pool_address: str, event_type: str, df: pd.DataFrame):
+def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
     filename = "{}/{}.pickle".format(pool_address, event_type)
     print("Pickling to", filename)
+    if not os.path.exists(args.pool_address):
+        os.mkdir(pool_address)
     with open(filename, 'wb') as f:
         pickle.dump(df, f)
 
-
-def load_pickles(pool_address: str, event_type: str):
+def load_pickles(pool_address: str, event_type: str) -> pd.DataFrame:
     filename = "{}/{}.pickle".format(pool_address, event_type)
     print("Unpickling from", filename)
     with open(filename, 'rb') as f:
         return pickle.load(f)
 
-
-def read_query_results(pool_address: str, event_type: str) -> pd.DataFrame:
-    filename = "{}/{}.json".format(pool_address, event_type)
-    print("Reading", filename)
-    return pd.read_json(filename, orient="records").set_index("block_number")
-
-
-def query_save(client, pool_address: str, event_type: str, sql: str):
+def query_and_save(client, pool_address: str, event_type: str, sql: str, writer):
     df = query(client, sql)
-    save_queries(pool_address, event_type, df)
-
+    writer(pool_address, event_type, df)
 
 def get_initial_token_distribution(new_results) -> dict:
     receipt = w3.eth.getTransactionReceipt(new_results.iloc[0]['transaction_hash'])
@@ -115,22 +100,22 @@ def get_initial_token_distribution(new_results) -> dict:
 def get_initial_pool_share(transfer_results, tx_hash):
     initial_tx_transfers = transfer_results.loc[transfer_results['transaction_hash'] == tx_hash]
     minting = initial_tx_transfers.loc[initial_tx_transfers['src'] == '0x0000000000000000000000000000000000000000']
-    wei_amount = minting.iloc[0]['amt']
-    return pd.np.true_divide(wei_amount, 10 ** 18)
+    wei_amount = int(minting.iloc[0]['amt'])
+    return Web3.fromWei(wei_amount, 'ether')
 
 
 def produce_initial_state(new_results, fees_results, transfer_results):
     tokens = get_initial_token_distribution(new_results)
-    swap_fee_weis = fees_results.iloc[0]['swapFee']
-    swap_fee = pd.np.true_divide(swap_fee_weis, 10 ** 18)
+    swap_fee_weis = int(fees_results.iloc[0]['swapFee'])
+    swap_fee = Web3.fromWei(swap_fee_weis, 'ether')
     pool_shares = get_initial_pool_share(transfer_results, new_results.iloc[0]['transaction_hash'])
-    creation_date = datetime.fromtimestamp(new_results.iloc[0]['block_timestamp'] / 1000).utcnow().isoformat()
+    creation_date = new_results.iloc[0]['block_timestamp'].isoformat()
     initial_states = {
         'pool': {
             'tokens': tokens,
             'generated_fees': 0.0,
-            'pool_shares': pool_shares,
-            'swap_fee': swap_fee
+            'pool_shares': pool_shares.to_eng_string(),
+            'swap_fee': swap_fee.to_eng_string()
         },
         'action_type': 'pool_creation',
         'change_datetime': creation_date
@@ -141,20 +126,28 @@ def produce_initial_state(new_results, fees_results, transfer_results):
         json.dump(initial_states, f, indent="\t")
 
 
-def format_denorms(denorms: dict):
+def format_denorms(denorms: dict) -> typing.List[tuping.Dict]:
+    """
+    format_denorms expects the input to be
+    [{'token_address': '0x89045d0af6a12782ec6f701ee6698beaf17d0ea2', 'denorm': Decimal('1000000000000000000.000000000')}, {'token_address': '0xe3b446b242ce55610ad381a8e8164c680a70f131', 'denorm': Decimal('1000000000000000000.000000000')}...]
+    """
+    d = []
     for item in denorms:
-        item['token_address'] = Web3.toChecksumAddress(item['token_address'])
-        item['token_symbol'] = erc20_info_getter.get_token_symbol(item['token_address'])
-        item['denorm'] = str(Web3.fromWei(item['denorm'], 'ether'))
-
+        a = {
+            "token_address": Web3.toChecksumAddress(item['token_address']),
+            "token_symbol": erc20_info_getter.get_token_symbol(item['token_address']),
+            "denorm": str(Web3.fromWei(item['denorm'], 'ether')),
+        }
+        d.append(a)
+    return d
 
 def classify_pool_share_transfers(transfers: []) -> (str, str):
     pool_share_burnt = list(filter(lambda x: x['dst'] == ZERO_ADDRESS, transfers))
     if len(pool_share_burnt) > 0:
-        return 'pool_amount_in', str(Web3.fromWei(pool_share_burnt[0]['amt'], 'ether'))
+        return 'pool_amount_in', str(Web3.fromWei(int(pool_share_burnt[0]['amt']), 'ether'))
     pool_share_minted = list(filter(lambda x: x['src'] == ZERO_ADDRESS, transfers))
     if len(pool_share_minted) > 0:
-        return 'pool_amount_out', str(Web3.fromWei(pool_share_minted[0]['amt'], 'ether'))
+        return 'pool_amount_out', str(Web3.fromWei(int(pool_share_minted[0]['amt']), 'ether'))
     raise Exception('not pool share mint or burn', transfers)
 
 
@@ -229,24 +222,22 @@ def produce_actions():
 
         client = bigquery.Client()
 
-        writer = query_save if not args.pickles else pickle_queries
-        writer(client, args.pool_address, "new", new_sql)
-        writer(client, args.pool_address, "join", join_sql)
-        writer(client, args.pool_address, "swap", swap_sql)
-        writer(client, args.pool_address, "exit", exit_sql)
-        writer(client, args.pool_address, "transfer", transfer_sql)
-        writer(client, args.pool_address, "fees", fees_sql)
-        writer(client, args.pool_address, "denorms", denorms_sql)
+        query_and_save(client, args.pool_address, "new", new_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "join", join_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "swap", swap_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "exit", exit_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "transfer", transfer_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "fees", fees_sql, save_queries_pickle)
+        query_and_save(client, args.pool_address, "denorms", denorms_sql, save_queries_pickle)
 
     else:
-        reader = read_query_results if not args.pickles else load_pickles
-        new_results = reader(args.pool_address, "new")
-        join_results = reader(args.pool_address, "join")
-        swap_results = reader(args.pool_address, "swap")
-        exit_results = reader(args.pool_address, "exit")
-        transfer_results = reader(args.pool_address, "transfer")
-        fees_results = reader(args.pool_address, "fees")
-        denorms_results = reader(args.pool_address, "denorms")
+        new_results = load_pickles(args.pool_address, "new").set_index("block_number")
+        join_results = load_pickles(args.pool_address, "join").set_index("block_number")
+        swap_results = load_pickles(args.pool_address, "swap").set_index("block_number")
+        exit_results = load_pickles(args.pool_address, "exit").set_index("block_number")
+        transfer_results = load_pickles(args.pool_address, "transfer").set_index("block_number")
+        fees_results = load_pickles(args.pool_address, "fees").set_index("block_number")
+        denorms_results = load_pickles(args.pool_address, "denorms").set_index("block_number")
 
         new_results["type"] = "new"
         join_results["type"] = "join"
@@ -279,11 +270,10 @@ def produce_actions():
                 # Invariant data that exists parallel to these actions. Merge them
                 # into the same Action object as a "context" for convenience.
                 fee = fees_dict[block_number]
-                denorms = denorms_results.loc[block_number].to_dict(orient="records")
-                format_denorms(denorms)
+                denorms = format_denorms(denorms_results.loc[block_number].to_dict(orient="records"))
                 # convert block_number and swap_fee to string to painlessly
                 # convert to JSON later (numpy.int64 can't be JSON serialized)
-                a = Action(timestamp=datetime.fromtimestamp(ts / 1000), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
+                a = Action(timestamp=ts.to_pydatetime(), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
                            denorms=denorms, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
                 actions.append(a)
 
@@ -324,7 +314,9 @@ from pstats import SortKey
 
 pr = cProfile.Profile()
 pr.enable()
-produce_actions()
+from ipdb import launch_ipdb_on_exception
+with launch_ipdb_on_exception():
+    produce_actions()
 pr.disable()
 s = io.StringIO()
 sortby = SortKey.CUMULATIVE

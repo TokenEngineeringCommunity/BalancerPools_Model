@@ -2,6 +2,7 @@ import getopt
 import json
 import os
 import sys
+import pickle
 
 from attr import dataclass
 from web3 import Web3, HTTPProvider
@@ -60,7 +61,6 @@ class ERC20InfoReader:
                 return self.token_mapping.get(address).get('symbol')
         contract = self.get_contract_for(address)
         symbol = contract.functions.symbol().call()
-        symbol = symbol.decode("utf-8")
         self.token_mapping[address] = {'symbol': symbol}
         return symbol
 
@@ -87,11 +87,11 @@ class TransactionReceiptGetter:
 
     def __init__(self, w3, pool_address):
         self.w3 = w3
-        self.file_name = "{}/{}.json".format(pool_address, 'receipts')
+        self.file_name = "{}/{}.pickle".format(pool_address, 'receipts')
         self.receipts = {}
         if os.path.exists(self.file_name):
             file = open(self.file_name)
-            self.receipts = json.load(file)
+            self.receipts = pickle.load(file)
             file.close()
 
     def get_transaction_receipt(self, tx_hash: str):
@@ -104,10 +104,9 @@ class TransactionReceiptGetter:
             return receipt
 
     def save(self):
-        json_object = json.dumps(self.receipts, indent=4)
         print('Writing', self.file_name)
-        with open(self.file_name, "w") as outfile:
-            outfile.write(json_object)
+        with open(self.file_name, "wb") as outfile:
+            pickle.dump(self.receipts, outfile)
 
 
 class BPoolLogCallParser:
