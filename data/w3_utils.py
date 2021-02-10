@@ -137,7 +137,7 @@ class BPoolLogCallParser:
 
     def __init__(self, erc20_info_reader: ERC20InfoReader):
         self.erc20_info_reader = erc20_info_reader
-        file = open('./BPool.json', )
+        file = open('./v1-abi.json', )
         abi_file = json.load(file)
         self.abi = abi_file['abi'].copy()
         file.close()
