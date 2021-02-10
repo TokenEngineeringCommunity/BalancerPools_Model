@@ -59,10 +59,6 @@ class ERC20InfoReader:
         if self.token_mapping.get(address):
             if self.token_mapping[address].get('symbol'):
                 return self.token_mapping.get(address).get('symbol')
-        if address == '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2':
-            # For some reason, MKR implementation makes Web3py crash
-            self.token_mapping[address] = {'symbol': 'MKR'}
-            return 'MKR'
         contract = self.get_contract_for(address)
         bsymbol = contract.functions.symbol().call()
         symbol = Web3.toText(bsymbol)
