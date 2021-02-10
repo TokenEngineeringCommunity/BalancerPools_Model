@@ -59,8 +59,13 @@ class ERC20InfoReader:
         if self.token_mapping.get(address):
             if self.token_mapping[address].get('symbol'):
                 return self.token_mapping.get(address).get('symbol')
+        if address == '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2':
+            # For some reason, MKR implementation makes Web3py crash
+            self.token_mapping[address] = {'symbol': 'MKR'}
+            return 'MKR'
         contract = self.get_contract_for(address)
-        symbol = contract.functions.symbol().call()
+        bsymbol = contract.functions.symbol().call()
+        symbol = Web3.toText(bsymbol)
         self.token_mapping[address] = {'symbol': symbol}
         return symbol
 
@@ -80,7 +85,7 @@ class ERC20InfoReader:
         if decimals == 18:
             return str(Web3.fromWei(int(amount), 'ether'))
         else:
-            return str(amount // decimals)
+            return str(int(amount) // decimals)
 
 
 class TransactionReceiptGetter:
@@ -137,9 +142,11 @@ class BPoolLogCallParser:
         self.abi = abi_file['abi'].copy()
         file.close()
 
-    def parse_from_receipt(self, receipt):
+    def parse_from_receipt(self, receipt, pool_address):
         anon_events = []
         for log in receipt.logs:
+            if log.address.lower() != pool_address.lower():
+                continue
             for idx, topic in enumerate(log.topics):
                 if idx == 0:
                     signature_candidate = Web3.toHex(topic[0:4])
@@ -236,7 +243,7 @@ class BPoolLogCallParser:
             hex = '0'
         return Web3.toInt(hexstr=hex)
 
-
+'''
 def main(argv):
     tx_hash = None
     node_url = None
@@ -270,3 +277,4 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+'''

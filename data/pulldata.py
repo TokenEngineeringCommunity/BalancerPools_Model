@@ -74,7 +74,7 @@ def query_and_save(client, pool_address: str, event_type: str, sql: str, writer)
 
 def get_initial_token_distribution(new_results) -> dict:
     receipt = w3.eth.getTransactionReceipt(new_results.iloc[0]['transaction_hash'])
-    events = log_call_parser.parse_from_receipt(receipt)
+    events = log_call_parser.parse_from_receipt(receipt, args.pool_address)
     bind_events = list(filter(lambda x: x['type'] == 'bind', events))
     tokens = {}
     total_denorm_weight = Decimal('0.0')
@@ -120,13 +120,14 @@ def produce_initial_state(new_results, fees_results, transfer_results):
         'action_type': 'pool_creation',
         'change_datetime': creation_date
     }
+    print(initial_states)
     initial_states_filename = args.pool_address + "-initial_pool_states.json"
     print("saving to", initial_states_filename)
     with open(initial_states_filename, 'w') as f:
         json.dump(initial_states, f, indent="\t")
 
 
-def format_denorms(denorms: dict) -> typing.List[tuping.Dict]:
+def format_denorms(denorms: dict) -> typing.List[typing.Dict]:
     """
     format_denorms expects the input to be
     [{'token_address': '0x89045d0af6a12782ec6f701ee6698beaf17d0ea2', 'denorm': Decimal('1000000000000000000.000000000')}, {'token_address': '0xe3b446b242ce55610ad381a8e8164c680a70f131', 'denorm': Decimal('1000000000000000000.000000000')}...]
@@ -188,7 +189,7 @@ def classify_actions(group):
     return action
 
 
-def merge_actions(group):
+def merge_actions(group, pool_address):
     merged_action = {
         "timestamp": group[0]['timestamp'],
         "tx_hash": group[0]['tx_hash'],
@@ -197,11 +198,13 @@ def merge_actions(group):
         "denorms": group[0]['denorms']
     }
     time.sleep(0.1)
+    print('merging tx', merged_action['tx_hash'])
     receipt = w3.eth.getTransactionReceipt(merged_action['tx_hash'])
-    input_data = log_call_parser.parse_from_receipt(receipt)
+    input_data = log_call_parser.parse_from_receipt(receipt, pool_address)
     merged_action['contract_call'] = input_data
     merged_action['action'] = classify_actions(group)
     return merged_action
+
 
 
 def produce_actions():
@@ -297,8 +300,9 @@ def produce_actions():
         # Filter out pool share transfer
         grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0]['action_type'] == 'transfer'), grouped_actions))
 
+        pool_address = args.pool_address
         # Combine events
-        grouped_actions = list(map(merge_actions, grouped_actions))
+        grouped_actions = list(map(lambda x: merge_actions(x, pool_address), grouped_actions))
 
         grouped_actions.sort(key=lambda a: a['timestamp'])
         # actions_dict = [a.to_dict() for a in actions]  # ridiculous that I have to do this, what am I importing dataclasses-json for
