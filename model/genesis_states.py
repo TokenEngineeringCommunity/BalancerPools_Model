@@ -1,44 +1,30 @@
 """
 Model parameters.
 """
-
+import typing
+import json
 # These are the initial conditions of the DAI-ETH Uniswap instance - https://etherscan.io/address/0x09cabEC1eAd1c0Ba254B09efb3EE13841712bE14
+
 from decimal import Decimal
 
 from model.parts.balancer_math import BalancerMath
 
-initial_values = {
-    'pool': {
-        'tokens': {
-            'DAI': {
-                'weight': 20,
-                'denorm_weight': 10,
-                'balance': 10000000,
-                'bound': True
-            },
-            'WETH': {
-                'weight': 80,
-                'denorm_weight': 40,
-                'balance': 67738.636173102396002749,
-                'bound': True
-            }
-        },
-        'generated_fees': 0.0,
-        'pool_shares': 100.0,
-        'swap_fee': 0.20
-    },
-    'action_type': 'pool_creation',
-    'change_datetime': '2020-12-07 13:34:14',
-    # Close value of first item from COINBASE_<token>USD_5.csv
-    'token_prices': {
-        'DAI': 1.004832,
-        'WETH': 596.75
-    },
-    'spot_prices': {
-        'WETH': BalancerMath.calc_spot_price(token_balance_in=Decimal('67738.636173102396002749'),
-                                             token_weight_in=Decimal('40'),
-                                             token_balance_out=Decimal('10000000'),
-                                             token_weight_out=Decimal('10'),
-                                             swap_fee=Decimal('0.25'))
-    }
-}
+def generate_initial_state(initial_values_json: str, spot_price_base_currency: str) -> typing.Dict:
+    with open(initial_values_json, "r") as f:
+        initial_values = json.load(f)
+
+    # Figure out the tokens that are NOT the spot_price_base_currency
+    other_tokens = [*initial_values['pool']['tokens'].keys()]
+    other_tokens.remove(spot_price_base_currency)
+
+    spot_prices = {}
+    for t in other_tokens:
+        base_token = initial_values['pool']['tokens'][spot_price_base_currency]
+        other_token = initial_values['pool']['tokens'][t]
+
+        spot_prices[t] = BalancerMath.calc_spot_price(token_balance_in=Decimal(other_token['balance']),
+                                                token_weight_in=Decimal(other_token['denorm_weight']),
+                                                token_balance_out=Decimal(base_token['balance']),
+                                                token_weight_out=Decimal(base_token['denorm_weight']),
+                                                swap_fee=Decimal(initial_values['pool']['swap_fee']))
+    return initial_values
