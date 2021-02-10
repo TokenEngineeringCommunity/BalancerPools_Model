@@ -6,4 +6,5 @@ venv/
 .ipynb_checkpoints/
 .vscode/
 *.csv
-*.json
+*-actions.json
+*-initial_pool_states.json
