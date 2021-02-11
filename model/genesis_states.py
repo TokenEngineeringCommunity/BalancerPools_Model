@@ -21,16 +21,15 @@ def generate_initial_state(initial_values_json: str, spot_price_base_currency: s
         base_token = initial_values['pool']['tokens'][spot_price_base_currency]
         other_token = initial_values['pool']['tokens'][t]
 
-        spot_prices[t] = BalancerMath.calc_spot_price(token_balance_in=Decimal(other_token['balance']),
-                                                token_weight_in=Decimal(other_token['denorm_weight']),
-                                                token_balance_out=Decimal(base_token['balance']),
-                                                token_weight_out=Decimal(base_token['denorm_weight']),
+        spot_prices[t] = BalancerMath.calc_spot_price(token_balance_in=other_token.balance,
+                                                token_weight_in=Decimal(other_token.denorm_weight),
+                                                token_balance_out=base_token.balance,
+                                                token_weight_out=Decimal(base_token.denorm_weight),
                                                 swap_fee=Decimal(initial_values['pool']['swap_fee']))
     initial_values["spot_prices"] = spot_prices
     return initial_values
 
 def token_finding_hook(k):
     if "weight" in k and "denorm_weight" in k and "balance" in k and "bound" in k:
-        print("I think we found a Token here!")
         return Token(weight=k["weight"], denorm_weight=k["denorm_weight"], balance=Decimal(k["balance"]), bound=k["bound"])
     return k
