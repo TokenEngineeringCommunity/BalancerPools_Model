@@ -27,4 +27,5 @@ def generate_initial_state(initial_values_json: str, spot_price_base_currency: s
                                                 token_balance_out=Decimal(base_token['balance']),
                                                 token_weight_out=Decimal(base_token['denorm_weight']),
                                                 swap_fee=Decimal(initial_values['pool']['swap_fee']))
+    initial_values["spot_prices"] = spot_prices
     return initial_values
