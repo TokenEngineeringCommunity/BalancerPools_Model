@@ -87,13 +87,13 @@ def get_initial_token_distribution(new_results) -> dict:
 
         tokens[token_symbol] = {
             'weight': None,
-            'denorm_weight': str(denorm),
+            'denorm_weight': denorm,
             'balance': inputs['balance'],
             'bound': True
         }
     for (key, token) in tokens.items():
         denorm = Decimal(token['denorm_weight'])
-        token['weight'] = str(denorm / total_denorm_weight)
+        token['weight'] = denorm / total_denorm_weight
     return tokens
 
 
@@ -114,8 +114,8 @@ def produce_initial_state(new_results, fees_results, transfer_results):
         'pool': {
             'tokens': tokens,
             'generated_fees': 0.0,
-            'pool_shares': pool_shares.to_eng_string(),
-            'swap_fee': swap_fee.to_eng_string()
+            'pool_shares': pool_shares,
+            'swap_fee': swap_fee
         },
         'action_type': 'pool_creation',
         'change_datetime': creation_date
