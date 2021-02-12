@@ -70,11 +70,26 @@ def load_pickles(pool_address: str, event_type: str) -> pd.DataFrame:
     with open(filename, 'rb') as f:
         return pickle.load(f)
 
+def load_txhash_contractcalls(pool_address: str) -> typing.Dict:
+    filename = "{}/txhash_contractcalls.json".format(pool_address)
+    print("Using backed up tx receipts from", filename)
+    try:
+        with open(filename, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+def save_txhash_contractcalls(pool_address: str, tx_receipts: typing.Dict):
+    filename = "{}/txhash_contractcalls.json".format(pool_address)
+    print("Saving tx receipts to", filename)
+    if not os.path.exists(args.pool_address):
+        os.mkdir(pool_address)
+    with open(filename, 'w') as f:
+        return json.dump(tx_receipts, f)
 
 def query_and_save(client, pool_address: str, event_type: str, sql: str, writer):
     df = query(client, sql)
     writer(pool_address, event_type, df)
-
 
 def get_initial_token_distribution(new_results) -> dict:
     receipt = w3.eth.getTransactionReceipt(new_results.iloc[0]['transaction_hash'])
@@ -212,23 +227,6 @@ def classify_actions(group):
     return action
 
 
-def merge_actions(group, pool_address):
-    merged_action = {
-        "timestamp": group[0]['timestamp'],
-        "tx_hash": group[0]['tx_hash'],
-        "block_number": group[0]['block_number'],
-        "swap_fee": str(Web3.fromWei(int(group[0]['swap_fee']), 'ether')),
-        "denorms": group[0]['denorms']
-    }
-    time.sleep(0.05)
-    print('merging tx', merged_action['tx_hash'])
-    receipt = w3.eth.getTransactionReceipt(merged_action['tx_hash'])
-    input_data = log_call_parser.parse_from_receipt(receipt, pool_address)
-    merged_action['contract_call'] = input_data
-    merged_action['action'] = classify_actions(group)
-    return merged_action
-
-
 def produce_actions():
     if not os.path.exists(args.pool_address):
         new_sql = 'select * from blockchain-etl.ethereum_balancer.BFactory_event_LOG_NEW_POOL where pool="{}"'.format(args.pool_address)
@@ -322,17 +320,43 @@ def produce_actions():
         # Filter out pool share transfer
         grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0]['action_type'] == 'transfer'), grouped_actions))
 
-        pool_address = args.pool_address
+        # with open("{}/grouped_actions.pickle".format(args.pool_address), "rb") as f:
+        #     grouped_actions = pickle.load(f)
         # Combine events
-        grouped_actions = list(map(lambda x: merge_actions(x, pool_address), grouped_actions))
+        pool_address = args.pool_address
+        tx_receipts = load_txhash_contractcalls(pool_address)
 
-        grouped_actions.sort(key=lambda a: a['timestamp'])
-        # actions_dict = [a.to_dict() for a in actions]  # ridiculous that I have to do this, what am I importing dataclasses-json for
+        actions_final = []
+        for group in grouped_actions:
+            merged_action = {
+                "timestamp": group[0]['timestamp'],
+                "tx_hash": group[0]['tx_hash'],
+                "block_number": group[0]['block_number'],
+                "swap_fee": str(Web3.fromWei(int(group[0]['swap_fee']), 'ether')),
+                "denorms": group[0]['denorms']
+            }
+            r = tx_receipts.get(merged_action['tx_hash'])
+            if not r:
+                print('merging tx', merged_action['tx_hash'])
+                time.sleep(0.05)
+                receipt = w3.eth.getTransactionReceipt(merged_action['tx_hash'])
+                input_data = log_call_parser.parse_from_receipt(receipt, pool_address)
+                merged_action['contract_call'] = input_data
+                tx_receipts[merged_action["tx_hash"]] = input_data
+            else:
+                merged_action['contract_call'] = r
+
+            merged_action['action'] = classify_actions(group)
+            actions_final.append(merged_action)
+
+        save_txhash_contractcalls(pool_address, tx_receipts)
+
+        actions_final.sort(key=lambda a: a['timestamp'])
 
         actions_filename = args.pool_address + "-actions.json"
         print("saving to", actions_filename)
         with open(actions_filename, 'w') as f:
-            json.dump(grouped_actions, f, indent="\t")
+            json.dump(actions_final, f, indent="\t")
 
 
 import cProfile, pstats, io
