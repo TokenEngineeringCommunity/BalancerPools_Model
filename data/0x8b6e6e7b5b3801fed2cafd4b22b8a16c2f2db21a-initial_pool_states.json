@@ -2,26 +2,22 @@
 	"pool": {
 		"tokens": {
 			"DAI": {
-				"weight": 0.1,
-				"denorm_weight": 10,
+				"weight": "0.1",
+				"denorm_weight": "10",
 				"balance": "10000000",
 				"bound": true
 			},
 			"WETH": {
-				"weight": 0.4,
-				"denorm_weight": 40,
+				"weight": "0.4",
+				"denorm_weight": "40",
 				"balance": "67738.636173102396002749",
 				"bound": true
 			}
 		},
 		"generated_fees": 0.0,
-		"pool_shares": 100,
-		"swap_fee": 0.0025
+		"pool_shares": "100",
+		"swap_fee": "0.0025"
 	},
 	"action_type": "pool_creation",
-	"change_datetime": "2020-12-07T13:34:14+00:00",
-	"token_prices": {
-		"DAI": 1.004832,
-		"WETH": 596.75
-	}
+	"change_datetime": "2020-12-07T13:34:14+00:00"
 }
