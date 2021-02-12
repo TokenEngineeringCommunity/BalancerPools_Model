@@ -1,94 +1,121 @@
 import getopt
 import json
+import os
 import sys
+import re
+
+import dateutil
 import pandas as pd
 
-def convert_to_action_json(actions, output_file_path):
-    result = []
-    action_index = None
-    for idx, row in actions.iterrows():
-        if action_index is None and row['action']['type'] == 'external_price_update':
-            continue
-        else:
-            action_index = 0
-        dict_row = row.to_dict()
-        dict_row['index'] = action_index
-        dict_row['datetime'] = idx.isoformat()
-        dict_row['action']['datetime'] = idx.isoformat()
-        action_index += 1
-        result.append(dict_row)
-    json_object = json.dumps(result, indent=4)
-    # Writing to sample.json
-    print('Writing', output_file_path)
-    with open(output_file_path, "w") as outfile:
-        outfile.write(json_object)
-    print('Done!')
 
-def add_price_feeds_to_actions(price_feeds, action_file_path):
-    print('Reading', action_file_path)
-    action_df = pd.read_json(action_file_path)
-    action_df['datetime'] = pd.to_datetime(action_df['datetime'], utc=True)
-    action_df = action_df.set_index('datetime')
-    price_feeds = price_feeds.set_index('datetime')
-    merged_df = action_df.append(price_feeds)
-    return merged_df.sort_index()
+def add_prices_to_actions(pool_address, fiat_symbol):
 
-def parse_price_feeds(price_feed_paths: [], token_symbols: []) -> []:
-    if len(price_feed_paths) != len(token_symbols):
-        raise Exception('Number of pricefeeds and tokens is different')
-    result_df = None
-    for idx, path in enumerate(price_feed_paths):
-        token = token_symbols[idx]
-        print('Reading', path)
-        parsed_price_feed = pd.read_csv(path, sep=';')
-        parsed_price_feed[f'{token}'] = parsed_price_feed.apply(lambda row: (row.open + row.close) / 2, axis=1)
+    def parse_price_feeds(token_symbols: []) -> []:
+        if len(price_feed_paths) != len(token_symbols):
+            raise Exception('Number of pricefeeds and tokens is different')
+        result_df = None
+        for idx, path in enumerate(price_feed_paths):
+            token = token_symbols[idx]
+            print('Reading', path)
+            parsed_price_feed = pd.read_csv(path, sep=';')
+            parsed_price_feed[f'{token}'] = parsed_price_feed.apply(lambda row: (row.open + row.close) / 2, axis=1)
 
-        if result_df is None:
-            result_df = parsed_price_feed.filter(['time', f'{token}'], axis=1)
-            result_df.rename(columns={'time': 'datetime'}, inplace=True)
-            result_df['datetime'] = pd.to_datetime(result_df['datetime'])
-        else:
-            result_df[f'{token}'] = parsed_price_feed[f'{token}']
+            if result_df is None:
+                result_df = parsed_price_feed.filter(['time', f'{token}'], axis=1)
+                result_df.rename(columns={'time': 'timestamp'}, inplace=True)
+                result_df['timestamp'] = pd.to_datetime(result_df['timestamp'])
+            else:
+                result_df[f'{token}'] = parsed_price_feed[f'{token}']
 
-    def generate_action(row):
-        result = {'type': 'external_price_update', 'tokens': {}}
-        for index, value in row.items():
-            if index in token_symbols:
-                result['tokens'][index] = value
+        def generate_action(row):
+            result = {'type': 'external_price_update', 'tokens': {}}
+            for index, value in row.items():
+                if index in token_symbols:
+                    result['tokens'][index] = value
+            return result
+
+        result_df['action'] = result_df.apply(generate_action, axis=1)
+        actions = result_df['action'].to_list()
+        datetimes = result_df['timestamp'].to_list()
+        result = []
+        for idx, action in enumerate(actions):
+            result.append({
+                'timestamp': datetimes[idx],
+                'fiat_currency': fiat_symbol,
+                'action': action
+            })
         return result
 
-    result_df['action'] = result_df.apply(generate_action, axis=1)
+    def get_price_feeds_tokens():
+        with open(f'{pool_address}-initial_pool_states.json', "r") as read_file:
+            initial_states = json.load(read_file)
+            tokens = initial_states['pool']['tokens']
+            token_symbols = []
+            feeds_file_paths = []
+            price_feeds = os.listdir(f'./{pool_address}-prices')
+            for feed_name in price_feeds:
+                for token in tokens:
+                    p = re.compile(token)
+                    result = p.search(feed_name)
+                    if result:
+                        token_symbols.append(token)
+                        feeds_file_paths.append(f'./{pool_address}-prices/{feed_name}')
+            return feeds_file_paths, token_symbols
 
-    return result_df
+    def add_price_feeds_to_actions_and_save():
+        with open(f'{pool_address}-actions.json', "r") as read_file:
+            actions = json.load(read_file)
+
+            actions.extend(price_actions)
+            def equalize_date_types(action):
+                if isinstance(action['timestamp'], str):
+                    action['timestamp'] = dateutil.parser.isoparse(action['timestamp'])
+                else:
+                    action['timestamp'] = action['timestamp'].to_pydatetime()
+                return action
+            actions = list(map(equalize_date_types, actions))
+            actions.sort(key=lambda x: x['timestamp'])
+
+            def convert_to_iso_str(action):
+                action['timestamp'] = action['timestamp'].isoformat()
+                return action
+
+            actions = list(map(convert_to_iso_str, actions))
+            actions_filename = pool_address + "-actions-prices.json"
+            print("saving to", actions_filename)
+            with open(actions_filename, 'w') as f:
+                json.dump(actions, f, indent="\t")
+
+    price_feed_paths, tokens = get_price_feeds_tokens()
+    print(price_feed_paths)
+    print(tokens)
+
+    price_actions = parse_price_feeds(token_symbols=tokens)
+    add_price_feeds_to_actions_and_save()
 
 
 def main(argv):
-    inputfile = ''
-    outputfile = ''
+    pool_address = None
+    fiat_symbol = ''
     tokens = []
     price_feed_paths = []
     try:
-        opts, args = getopt.getopt(argv, "hi:o:f:t:", ["ifile=", "ofile=", "price_feeds=", "tokens="])
+        opts, args = getopt.getopt(argv, "hp:f:", ["pool_address=", "fiat_symbol="])
     except getopt.GetoptError:
-        print('add_external_price_feeds.py -i <input_action_file> -o <outputfile> -f <price_feeds separated by ,> -t <token_symbols separated by ,>')
+        print('add_external_price_feeds.py -p <pool_address> -f <fiat_symbol>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
             print(
-                'add_external_price_feeds.py -i <input_action_file> -o <outputfile> -f <price_feeds separated by ,> -t <token_symbols separated by ,>')
+                'add_external_price_feeds.py -p <pool_address> -f <fiat_symbol>')
             sys.exit()
-        elif opt in ("-f", "--price_feeds"):
-            price_feed_paths = arg.split(',')
-        elif opt in ("-t", "--tokens"):
-            tokens = arg.split(',')
-        elif opt in ("-i", "--ifile"):
-            inputfile = arg
-        elif opt in ("-o", "--ofile"):
-            outputfile = arg
+        elif opt in ("-p", "--pool_address"):
+            pool_address = arg
+        elif opt in ("-f", "--fiat_symbol"):
+            fiat_symbol = arg
 
-    price_feeds = parse_price_feeds(price_feed_paths=price_feed_paths, token_symbols=tokens)
-    merged_actions = add_price_feeds_to_actions(price_feeds, inputfile)
-    convert_to_action_json(merged_actions, outputfile)
+    add_prices_to_actions(pool_address, fiat_symbol)
+
 
 if __name__ == "__main__":
     main(sys.argv[1:])
