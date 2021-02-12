@@ -54,6 +54,7 @@ def query(client, sql: str) -> pd.DataFrame:
     )
     return result
 
+
 def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
     filename = "{}/{}.pickle".format(pool_address, event_type)
     print("Pickling to", filename)
@@ -62,15 +63,18 @@ def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
     with open(filename, 'wb') as f:
         pickle.dump(df, f)
 
+
 def load_pickles(pool_address: str, event_type: str) -> pd.DataFrame:
     filename = "{}/{}.pickle".format(pool_address, event_type)
     print("Unpickling from", filename)
     with open(filename, 'rb') as f:
         return pickle.load(f)
 
+
 def query_and_save(client, pool_address: str, event_type: str, sql: str, writer):
     df = query(client, sql)
     writer(pool_address, event_type, df)
+
 
 def get_initial_token_distribution(new_results) -> dict:
     receipt = w3.eth.getTransactionReceipt(new_results.iloc[0]['transaction_hash'])
@@ -87,13 +91,13 @@ def get_initial_token_distribution(new_results) -> dict:
 
         tokens[token_symbol] = {
             'weight': None,
-            'denorm_weight': denorm,
+            'denorm_weight': str(denorm),
             'balance': inputs['balance'],
             'bound': True
         }
     for (key, token) in tokens.items():
         denorm = Decimal(token['denorm_weight'])
-        token['weight'] = denorm / total_denorm_weight
+        token['weight'] = str(denorm / total_denorm_weight)
     return tokens
 
 
@@ -114,8 +118,8 @@ def produce_initial_state(new_results, fees_results, transfer_results):
         'pool': {
             'tokens': tokens,
             'generated_fees': 0.0,
-            'pool_shares': pool_shares,
-            'swap_fee': swap_fee
+            'pool_shares': str(pool_shares),
+            'swap_fee': str(swap_fee)
         },
         'action_type': 'pool_creation',
         'change_datetime': creation_date
@@ -142,6 +146,7 @@ def format_denorms(denorms: dict) -> typing.List[typing.Dict]:
         d.append(a)
     return d
 
+
 def classify_pool_share_transfers(transfers: []) -> (str, str):
     pool_share_burnt = list(filter(lambda x: x['dst'] == ZERO_ADDRESS, transfers))
     if len(pool_share_burnt) > 0:
@@ -152,15 +157,15 @@ def classify_pool_share_transfers(transfers: []) -> (str, str):
     raise Exception('not pool share mint or burn', transfers)
 
 
-def map_token_amounts(txs: [], address_key: str, amount_key: str, output_key: str):
+def map_token_amounts(txs: [], address_key: str, amount_key: str):
     def map_tx(x):
         mapped = {}
         symbol = erc20_info_getter.get_token_symbol(x[address_key])
-        mapped[symbol] = erc20_info_getter.normalize_token_units(x[address_key], x[amount_key])
+        mapped['amount'] = erc20_info_getter.normalize_token_units(x[address_key], x[amount_key])
+        mapped['symbol'] = symbol
         return mapped
 
-    mapped_joins = list(map(map_tx, txs))
-    return output_key, mapped_joins
+    return list(map(map_tx, txs))
 
 
 def classify_actions(group):
@@ -171,21 +176,39 @@ def classify_actions(group):
         action[key] = value
     joins = list(filter(lambda x: x['action_type'] == 'join', group))
     if len(joins) > 0:
-        key, value = map_token_amounts(joins[0]['action'], address_key='tokenIn', amount_key='tokenAmountIn', output_key='tokens_in')
-        action[key] = value
+        action['type'] = 'join'
+        value = map_token_amounts(joins[0]['action'], address_key='tokenIn', amount_key='tokenAmountIn')
+        if len(value) == 1:
+            action['token_in'] = value[0]
+        else:
+            action['tokens_in'] = value
     exits = list(filter(lambda x: x['action_type'] == 'exit', group))
     if len(exits) > 0:
-        key, value = map_token_amounts(exits[0]['action'], address_key='tokenOut', amount_key='tokenAmountOut', output_key='tokens_out')
-        action[key] = value
+        action['type'] = 'exit'
+        value = map_token_amounts(exits[0]['action'], address_key='tokenOut', amount_key='tokenAmountOut')
+        if len(value) == 1:
+            action['token_out'] = value[0]
+        else:
+            action['tokens_out'] = value
     swaps = list(filter(lambda x: x['action_type'] == 'swap', group))
     if len(swaps) > 0:
-        swap_result = {}
-        in_key, in_value = map_token_amounts(swaps[0]['action'], address_key='tokenIn', amount_key='tokenAmountIn', output_key='tokens_in')
-        swap_result[in_key] = in_value
-        out_key, out_value = map_token_amounts(swaps[0]['action'], address_key='tokenOut', amount_key='tokenAmountOut',
-                                               output_key='tokens_out')
-        swap_result[out_key] = out_value
-        action['swap'] = swap_result
+        action['type'] = 'swap'
+        in_value = map_token_amounts(swaps[0]['action'], address_key='tokenIn', amount_key='tokenAmountIn')
+        if len(in_value) == 1:
+            action['token_in'] = in_value[0]
+        else:
+            action['tokens_in'] = in_value
+        out_value = map_token_amounts(swaps[0]['action'], address_key='tokenOut', amount_key='tokenAmountOut')
+        if len(out_value) == 1:
+            action['token_out'] = out_value[0]
+        else:
+            action['tokens_out'] = out_value
+    if action.get('type') is None:
+        action['type'] = 'pool_creation'
+    if action['type'] == 'join' and action.get('token_in') is not None:
+        action['type'] = 'join_swap'
+    elif action['type'] == 'exit' and action.get('token_out') is not None:
+        action['type'] = 'exit_swap'
     return action
 
 
@@ -197,14 +220,13 @@ def merge_actions(group, pool_address):
         "swap_fee": str(Web3.fromWei(int(group[0]['swap_fee']), 'ether')),
         "denorms": group[0]['denorms']
     }
-    time.sleep(0.1)
+    time.sleep(0.05)
     print('merging tx', merged_action['tx_hash'])
     receipt = w3.eth.getTransactionReceipt(merged_action['tx_hash'])
     input_data = log_call_parser.parse_from_receipt(receipt, pool_address)
     merged_action['contract_call'] = input_data
     merged_action['action'] = classify_actions(group)
     return merged_action
-
 
 
 def produce_actions():
@@ -319,6 +341,7 @@ from pstats import SortKey
 pr = cProfile.Profile()
 pr.enable()
 from ipdb import launch_ipdb_on_exception
+
 with launch_ipdb_on_exception():
     produce_actions()
 pr.disable()
