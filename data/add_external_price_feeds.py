@@ -81,6 +81,11 @@ def add_prices_to_actions(pool_address, fiat_symbol):
                 return action
 
             actions = list(map(convert_to_iso_str, actions))
+
+            # Remove prices before pool creation. First action must be pool creation
+            while actions[0]['action']['type'] != 'pool_creation':
+                actions.pop(0)
+
             actions_filename = pool_address + "-actions-prices.json"
             print("saving to", actions_filename)
             with open(actions_filename, 'w') as f:
