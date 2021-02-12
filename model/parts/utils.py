@@ -1,5 +1,5 @@
 from pandas import DataFrame
-
+from decimal import Decimal
 
 def append_to_list(dictionary, key, value):
     if dictionary.get(key) is None:
@@ -12,9 +12,9 @@ def post_processing(df: DataFrame) -> DataFrame:
     for i, row in df.iterrows():
         idx_pool = row['pool']
         for token in idx_pool['tokens']:
-            append_to_list(sim_dict, f'token_{token.lower()}_balance', idx_pool['tokens'][token]['balance'])
-            append_to_list(sim_dict, f'token_{token.lower()}_weight', idx_pool['tokens'][token]['weight'])
-            append_to_list(sim_dict, f'token_{token.lower()}_denorm_weight', idx_pool['tokens'][token]['denorm_weight'])
+            append_to_list(sim_dict, f'token_{token.lower()}_balance', Decimal(idx_pool['tokens'][token].balance))
+            append_to_list(sim_dict, f'token_{token.lower()}_weight', idx_pool['tokens'][token].weight)
+            append_to_list(sim_dict, f'token_{token.lower()}_denorm_weight', idx_pool['tokens'][token].denorm_weight)
         append_to_list(sim_dict, 'generated_fees', idx_pool['generated_fees'])
         append_to_list(sim_dict, 'pool_shares', idx_pool['pool_shares'])
 
