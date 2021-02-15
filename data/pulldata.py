@@ -87,9 +87,10 @@ def save_txhash_contractcalls(pool_address: str, tx_receipts: typing.Dict):
     with open(filename, 'w') as f:
         return json.dump(tx_receipts, f)
 
-def query_and_save(client, pool_address: str, event_type: str, sql: str, writer):
+def query_and_save(client, pool_address: str, event_type: str, sql: str, writer) -> pd.DataFrame:
     df = query(client, sql)
     writer(pool_address, event_type, df)
+    return df
 
 def get_initial_token_distribution(new_results) -> dict:
     receipt = w3.eth.getTransactionReceipt(new_results.iloc[0]['transaction_hash'])
@@ -248,7 +249,7 @@ def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFra
 
     return actions
 
-def produce_actions():
+def stage1_load_sql_data(pool_address: str):
     if not os.path.exists(args.pool_address):
         new_sql = 'select * from blockchain-etl.ethereum_balancer.BFactory_event_LOG_NEW_POOL where pool="{}"'.format(args.pool_address)
         swap_sql = 'select * from blockchain-etl.ethereum_balancer.BPool_event_LOG_SWAP where contract_address="{}" order by block_number'.format(
@@ -266,13 +267,13 @@ def produce_actions():
 
         client = bigquery.Client()
 
-        query_and_save(client, args.pool_address, "new", new_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "join", join_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "swap", swap_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "exit", exit_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "transfer", transfer_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "fees", fees_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "denorms", denorms_sql, save_queries_pickle)
+        new_results = query_and_save(client, args.pool_address, "new", new_sql, save_queries_pickle)
+        join_results = query_and_save(client, args.pool_address, "join", join_sql, save_queries_pickle)
+        swap_results = query_and_save(client, args.pool_address, "swap", swap_sql, save_queries_pickle)
+        exit_results = query_and_save(client, args.pool_address, "exit", exit_sql, save_queries_pickle)
+        transfer_results = query_and_save(client, args.pool_address, "transfer", transfer_sql, save_queries_pickle)
+        fees_results = query_and_save(client, args.pool_address, "fees", fees_sql, save_queries_pickle)
+        denorms_results = query_and_save(client, args.pool_address, "denorms", denorms_sql, save_queries_pickle)
 
     else:
         new_results = load_pickles(args.pool_address, "new").set_index("block_number")
@@ -282,6 +283,11 @@ def produce_actions():
         transfer_results = load_pickles(args.pool_address, "transfer").set_index("block_number")
         fees_results = load_pickles(args.pool_address, "fees").set_index("block_number")
         denorms_results = load_pickles(args.pool_address, "denorms").set_index("block_number")
+
+    return new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results
+
+def produce_actions():
+        new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results = stage1_load_sql_data(args.pool_address)
 
         new_results["type"] = "new"
         join_results["type"] = "join"
