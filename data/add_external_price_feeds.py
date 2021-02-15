@@ -1,8 +1,10 @@
 import getopt
 import json
+import math
 import os
 import sys
 import re
+from math import nan
 
 import dateutil
 import pandas as pd
@@ -19,7 +21,6 @@ def add_prices_to_actions(pool_address, fiat_symbol):
             print('Reading', path)
             parsed_price_feed = pd.read_csv(path, sep=';')
             parsed_price_feed[f'{token}'] = parsed_price_feed.apply(lambda row: (row.open + row.close) / 2, axis=1)
-
             if result_df is None:
                 result_df = parsed_price_feed.filter(['time', f'{token}'], axis=1)
                 result_df.rename(columns={'time': 'timestamp'}, inplace=True)
@@ -39,11 +40,17 @@ def add_prices_to_actions(pool_address, fiat_symbol):
         datetimes = result_df['timestamp'].to_list()
         result = []
         for idx, action in enumerate(actions):
+            skip = False
+            for token in action['tokens']:
+                skip = math.isnan(action['tokens'][token])
+            if skip:
+                continue
             result.append({
                 'timestamp': datetimes[idx],
                 'fiat_currency': fiat_symbol,
                 'action': action
             })
+
         return result
 
     def get_price_feeds_tokens():
