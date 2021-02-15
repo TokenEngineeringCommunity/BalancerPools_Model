@@ -226,6 +226,27 @@ def classify_actions(group):
         action['type'] = 'exit_swap'
     return action
 
+def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFrame):
+    actions = []
+    grouped = events_list.groupby("transaction_hash")
+    for txhash, events in grouped:
+        # Get basic info from first event log, no matter how many there actually are
+        first_event_log = events.iloc[0]
+        ts = first_event_log["block_timestamp"]
+        tx_hash = first_event_log["transaction_hash"]
+        block_number = first_event_log.name
+
+        # Invariant data that exists parallel to these actions. Merge them
+        # into the same Action object as a "context" for convenience.
+        fee = fees[block_number]
+        denorm = format_denorms(denorms.loc[block_number].to_dict(orient="records"))
+        # convert block_number and swap_fee to string to painlessly
+        # convert to JSON later (numpy.int64 can't be JSON serialized)
+        a = Action(timestamp=ts.to_pydatetime(), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
+                    denorms=denorm, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
+        actions.append(a)
+
+    return actions
 
 def produce_actions():
     if not os.path.exists(args.pool_address):
@@ -280,34 +301,12 @@ def produce_actions():
 
         produce_initial_state(new_results, fees_results, transfer_results)
 
-        def turn_events_into_actions(events_list):
-            actions = []
-            grouped = events_list.groupby("transaction_hash")
-            for txhash, events in grouped:
-                # Get basic info from first event log, no matter how many there actually are
-                first_event_log = events.iloc[0]
-                ts = first_event_log["block_timestamp"]
-                tx_hash = first_event_log["transaction_hash"]
-                block_number = first_event_log.name
-
-                # Invariant data that exists parallel to these actions. Merge them
-                # into the same Action object as a "context" for convenience.
-                fee = fees_dict[block_number]
-                denorms = format_denorms(denorms_results.loc[block_number].to_dict(orient="records"))
-                # convert block_number and swap_fee to string to painlessly
-                # convert to JSON later (numpy.int64 can't be JSON serialized)
-                a = Action(timestamp=ts.to_pydatetime(), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
-                           denorms=denorms, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
-                actions.append(a)
-
-            return actions
-
         actions = []
-        actions.extend(turn_events_into_actions(new_results))
-        actions.extend(turn_events_into_actions(join_results))
-        actions.extend(turn_events_into_actions(swap_results))
-        actions.extend(turn_events_into_actions(exit_results))
-        actions.extend(turn_events_into_actions(transfer_results))
+        actions.extend(turn_events_into_actions(new_results, fees_dict, denorms_results))
+        actions.extend(turn_events_into_actions(join_results, fees_dict, denorms_results))
+        actions.extend(turn_events_into_actions(swap_results, fees_dict, denorms_results))
+        actions.extend(turn_events_into_actions(exit_results, fees_dict, denorms_results))
+        actions.extend(turn_events_into_actions(transfer_results, fees_dict, denorms_results))
 
         grouped_by_tx_actions = {}
         for i, action in enumerate(actions):
