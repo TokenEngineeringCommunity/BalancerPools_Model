@@ -91,11 +91,23 @@ def add_prices_to_actions(pool_address, fiat_symbol):
             with open(actions_filename, 'w') as f:
                 json.dump(actions, f, indent="\t")
 
+    def add_price_feeds_to_initial_state_and_save():
+        with open(f'{pool_address}-initial_pool_states.json', "r") as read_file:
+            initial_prices = price_actions[0]
+            initial_state = json.load(read_file)
+            print(initial_prices)
+            initial_state['token_prices'] = initial_prices['action']['tokens']
+            initial_states_filenames = f'{pool_address}-initial_pool_states-prices.json'
+            print("saving to", initial_states_filenames)
+            with open(initial_states_filenames, 'w') as f:
+                json.dump(initial_state, f, indent="\t")
+
     price_feed_paths, tokens = get_price_feeds_tokens()
     print(price_feed_paths)
     print(tokens)
 
     price_actions = parse_price_feeds(token_symbols=tokens)
+    add_price_feeds_to_initial_state_and_save()
     add_price_feeds_to_actions_and_save()
 
 
