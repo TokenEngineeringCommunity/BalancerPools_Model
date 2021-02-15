@@ -54,7 +54,6 @@ def query(client, sql: str) -> pd.DataFrame:
     )
     return result
 
-
 def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
     filename = "{}/{}.pickle".format(pool_address, event_type)
     print("Pickling to", filename)
@@ -62,7 +61,6 @@ def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
         os.mkdir(pool_address)
     with open(filename, 'wb') as f:
         pickle.dump(df, f)
-
 
 def load_pickles(pool_address: str, event_type: str) -> pd.DataFrame:
     filename = "{}/{}.pickle".format(pool_address, event_type)
@@ -116,36 +114,11 @@ def get_initial_token_distribution(new_results) -> dict:
         token['weight'] = str(denorm / total_denorm_weight)
     return tokens
 
-
 def get_initial_pool_share(transfer_results, tx_hash):
     initial_tx_transfers = transfer_results.loc[transfer_results['transaction_hash'] == tx_hash]
     minting = initial_tx_transfers.loc[initial_tx_transfers['src'] == '0x0000000000000000000000000000000000000000']
     wei_amount = int(minting.iloc[0]['amt'])
     return Web3.fromWei(wei_amount, 'ether')
-
-
-def produce_initial_state(new_results, fees_results, transfer_results):
-    tokens = get_initial_token_distribution(new_results)
-    swap_fee_weis = int(fees_results.iloc[0]['swapFee'])
-    swap_fee = Web3.fromWei(swap_fee_weis, 'ether')
-    pool_shares = get_initial_pool_share(transfer_results, new_results.iloc[0]['transaction_hash'])
-    creation_date = new_results.iloc[0]['block_timestamp'].isoformat()
-    initial_states = {
-        'pool': {
-            'tokens': tokens,
-            'generated_fees': 0.0,
-            'pool_shares': str(pool_shares),
-            'swap_fee': str(swap_fee)
-        },
-        'action_type': 'pool_creation',
-        'change_datetime': creation_date
-    }
-    print(initial_states)
-    initial_states_filename = args.pool_address + "-initial_pool_states.json"
-    print("saving to", initial_states_filename)
-    with open(initial_states_filename, 'w') as f:
-        json.dump(initial_states, f, indent="\t")
-
 
 def format_denorms(denorms: dict) -> typing.List[typing.Dict]:
     """
@@ -162,7 +135,6 @@ def format_denorms(denorms: dict) -> typing.List[typing.Dict]:
         d.append(a)
     return d
 
-
 def classify_pool_share_transfers(transfers: []) -> (str, str):
     pool_share_burnt = list(filter(lambda x: x['dst'] == ZERO_ADDRESS, transfers))
     if len(pool_share_burnt) > 0:
@@ -171,7 +143,6 @@ def classify_pool_share_transfers(transfers: []) -> (str, str):
     if len(pool_share_minted) > 0:
         return 'pool_amount_out', str(Web3.fromWei(int(pool_share_minted[0]['amt']), 'ether'))
     raise Exception('not pool share mint or burn', transfers)
-
 
 def map_token_amounts(txs: [], address_key: str, amount_key: str):
     def map_tx(x):
@@ -182,7 +153,6 @@ def map_token_amounts(txs: [], address_key: str, amount_key: str):
         return mapped
 
     return list(map(map_tx, txs))
-
 
 def classify_actions(group):
     action = {}
@@ -227,7 +197,7 @@ def classify_actions(group):
         action['type'] = 'exit_swap'
     return action
 
-def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFrame):
+def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFrame) -> typing.List[Action]:
     actions = []
     grouped = events_list.groupby("transaction_hash")
     for txhash, events in grouped:
@@ -286,6 +256,59 @@ def stage1_load_sql_data(pool_address: str):
 
     return new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results
 
+def stage2_produce_initial_state(new_results, fees_results, transfer_results):
+    tokens = get_initial_token_distribution(new_results)
+    swap_fee_weis = int(fees_results.iloc[0]['swapFee'])
+    swap_fee = Web3.fromWei(swap_fee_weis, 'ether')
+    pool_shares = get_initial_pool_share(transfer_results, new_results.iloc[0]['transaction_hash'])
+    creation_date = new_results.iloc[0]['block_timestamp'].isoformat()
+    initial_states = {
+        'pool': {
+            'tokens': tokens,
+            'generated_fees': 0.0,
+            'pool_shares': str(pool_shares),
+            'swap_fee': str(swap_fee)
+        },
+        'action_type': 'pool_creation',
+        'change_datetime': creation_date
+    }
+    print(initial_states)
+    initial_states_filename = args.pool_address + "-initial_pool_states.json"
+    with open(initial_states_filename, 'w') as f:
+        json.dump(initial_states, f, indent="\t")
+        print("Saved to", initial_states_filename)
+
+def stage3_merge_actions(pool_address, grouped_actions):
+    tx_receipts = load_txhash_contractcalls(pool_address)
+
+    actions_final = []
+    for group in grouped_actions:
+        merged_action = {
+            "timestamp": group[0]['timestamp'],
+            "tx_hash": group[0]['tx_hash'],
+            "block_number": group[0]['block_number'],
+            "swap_fee": str(Web3.fromWei(int(group[0]['swap_fee']), 'ether')),
+            "denorms": group[0]['denorms']
+        }
+        r = tx_receipts.get(merged_action['tx_hash'])
+        if not r:
+            print('merging tx', merged_action['tx_hash'])
+            time.sleep(0.05)
+            receipt = w3.eth.getTransactionReceipt(merged_action['tx_hash'])
+            input_data = log_call_parser.parse_from_receipt(receipt, pool_address)
+            merged_action['contract_call'] = input_data
+            tx_receipts[merged_action["tx_hash"]] = input_data
+        else:
+            merged_action['contract_call'] = r
+
+        merged_action['action'] = classify_actions(group)
+        actions_final.append(merged_action)
+
+    save_txhash_contractcalls(pool_address, tx_receipts)
+
+    actions_final.sort(key=lambda a: a['timestamp'])
+    return actions_final
+
 def produce_actions():
         new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results = stage1_load_sql_data(args.pool_address)
 
@@ -305,7 +328,7 @@ def produce_actions():
         # Pandas, please don't truncate columns when I print them out
         pd.set_option('display.max_colwidth', None)
 
-        produce_initial_state(new_results, fees_results, transfer_results)
+        stage2_produce_initial_state(new_results, fees_results, transfer_results)
 
         actions = []
         actions.extend(turn_events_into_actions(new_results, fees_dict, denorms_results))
@@ -327,37 +350,8 @@ def produce_actions():
 
         # with open("{}/grouped_actions.pickle".format(args.pool_address), "rb") as f:
         #     grouped_actions = pickle.load(f)
-        # Combine events
-        pool_address = args.pool_address
-        tx_receipts = load_txhash_contractcalls(pool_address)
 
-        actions_final = []
-        for group in grouped_actions:
-            merged_action = {
-                "timestamp": group[0]['timestamp'],
-                "tx_hash": group[0]['tx_hash'],
-                "block_number": group[0]['block_number'],
-                "swap_fee": str(Web3.fromWei(int(group[0]['swap_fee']), 'ether')),
-                "denorms": group[0]['denorms']
-            }
-            r = tx_receipts.get(merged_action['tx_hash'])
-            if not r:
-                print('merging tx', merged_action['tx_hash'])
-                time.sleep(0.05)
-                receipt = w3.eth.getTransactionReceipt(merged_action['tx_hash'])
-                input_data = log_call_parser.parse_from_receipt(receipt, pool_address)
-                merged_action['contract_call'] = input_data
-                tx_receipts[merged_action["tx_hash"]] = input_data
-            else:
-                merged_action['contract_call'] = r
-
-            merged_action['action'] = classify_actions(group)
-            actions_final.append(merged_action)
-
-        save_txhash_contractcalls(pool_address, tx_receipts)
-
-        actions_final.sort(key=lambda a: a['timestamp'])
-
+        actions_final = stage3_merge_actions(args.pool_address, grouped_actions)
         actions_filename = args.pool_address + "-actions.json"
         print("saving to", actions_filename)
         with open(actions_filename, 'w') as f:
