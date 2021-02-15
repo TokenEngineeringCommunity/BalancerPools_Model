@@ -38,5 +38,4 @@ def s_update_spot_prices(params, substep, state_history, previous_state, policy_
     ref_token = params[0]['spot_price_reference']
 
     spot_prices = calculate_spot_prices(pool, ref_token)
-    print(spot_prices)
     return 'spot_prices', spot_prices
