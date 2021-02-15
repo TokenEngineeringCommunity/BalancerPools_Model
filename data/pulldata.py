@@ -358,18 +358,7 @@ def produce_actions():
             json.dump(actions_final, f, indent="\t")
 
 
-import cProfile, pstats, io
-from pstats import SortKey
-
-pr = cProfile.Profile()
-pr.enable()
 from ipdb import launch_ipdb_on_exception
 
 with launch_ipdb_on_exception():
     produce_actions()
-pr.disable()
-s = io.StringIO()
-sortby = SortKey.CUMULATIVE
-ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-ps.print_stats(40)
-print(s.getvalue())
