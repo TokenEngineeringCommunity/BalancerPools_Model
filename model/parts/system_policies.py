@@ -1,5 +1,5 @@
 from decimal import Decimal
-import ipdb
+# import ipdb
 import pandas as pd
 
 from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
@@ -34,6 +34,7 @@ class ActionDecoder:
         '''
         idx = current_state['timestep'] + 1
         action = ActionDecoder.action_df['action'][idx]
+        timestamp = ActionDecoder.action_df['timestamp'][idx]
         if action['type'] == 'swap':
             answer = p_swap_exact_amount_in(params, step, history, current_state, action)
         elif action['type'] == 'join':
@@ -43,10 +44,11 @@ class ActionDecoder:
         elif action['type'] == 'exit_swap':
             answer = p_exit_swap_extern_amount_out(params, step, history, current_state, action)
         elif action['type'] == 'external_price_update':
-            return {'external_price_update': action['tokens'], 'change_datetime_update': action['datetime'], 'action_type': action['type']}
+            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type']}
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
-        return {'pool_update': answer, 'change_datetime_update': action['datetime'], 'action_type': action['type']}
+        return {'pool_update': answer, 'change_datetime_update': timestamp, 'action_type': action['type']}
+
 
 def p_swap_exact_amount_in(params, step, history, current_state, action):
     pool = current_state['pool']
