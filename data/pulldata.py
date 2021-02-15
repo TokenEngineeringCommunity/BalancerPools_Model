@@ -310,52 +310,52 @@ def stage3_merge_actions(pool_address, grouped_actions):
     return actions_final
 
 def produce_actions():
-        new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results = stage1_load_sql_data(args.pool_address)
+    new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results = stage1_load_sql_data(args.pool_address)
 
-        new_results["type"] = "new"
-        join_results["type"] = "join"
-        swap_results["type"] = "swap"
-        exit_results["type"] = "exit"
-        transfer_results["type"] = "transfer"
+    new_results["type"] = "new"
+    join_results["type"] = "join"
+    swap_results["type"] = "swap"
+    exit_results["type"] = "exit"
+    transfer_results["type"] = "transfer"
 
-        # Later we will drop the column "address" from denorms, because it is
-        # just the pool address - it never changes.
-        denorms_results.drop(["address"], axis=1, inplace=True)
-        # Using loc is slow. To avoid costly lookups by block_number, we convert
-        # swapFee lookups into a dict, and denorms too
-        fees_dict = fees_results.drop("address", axis=1).to_dict()["swapFee"]
+    # Later we will drop the column "address" from denorms, because it is
+    # just the pool address - it never changes.
+    denorms_results.drop(["address"], axis=1, inplace=True)
+    # Using loc is slow. To avoid costly lookups by block_number, we convert
+    # swapFee lookups into a dict, and denorms too
+    fees_dict = fees_results.drop("address", axis=1).to_dict()["swapFee"]
 
-        # Pandas, please don't truncate columns when I print them out
-        pd.set_option('display.max_colwidth', None)
+    # Pandas, please don't truncate columns when I print them out
+    pd.set_option('display.max_colwidth', None)
 
-        stage2_produce_initial_state(new_results, fees_results, transfer_results)
+    stage2_produce_initial_state(new_results, fees_results, transfer_results)
 
-        actions = []
-        actions.extend(turn_events_into_actions(new_results, fees_dict, denorms_results))
-        actions.extend(turn_events_into_actions(join_results, fees_dict, denorms_results))
-        actions.extend(turn_events_into_actions(swap_results, fees_dict, denorms_results))
-        actions.extend(turn_events_into_actions(exit_results, fees_dict, denorms_results))
-        actions.extend(turn_events_into_actions(transfer_results, fees_dict, denorms_results))
+    actions = []
+    actions.extend(turn_events_into_actions(new_results, fees_dict, denorms_results))
+    actions.extend(turn_events_into_actions(join_results, fees_dict, denorms_results))
+    actions.extend(turn_events_into_actions(swap_results, fees_dict, denorms_results))
+    actions.extend(turn_events_into_actions(exit_results, fees_dict, denorms_results))
+    actions.extend(turn_events_into_actions(transfer_results, fees_dict, denorms_results))
 
-        grouped_by_tx_actions = {}
-        for i, action in enumerate(actions):
-            tx_hash = actions[i].tx_hash
-            if grouped_by_tx_actions.get(tx_hash) is None:
-                grouped_by_tx_actions[tx_hash] = []
-            grouped_by_tx_actions[tx_hash].append(action.to_dict())
-        grouped_actions = list(map(lambda key: grouped_by_tx_actions[key], grouped_by_tx_actions))
+    grouped_by_tx_actions = {}
+    for i, action in enumerate(actions):
+        tx_hash = actions[i].tx_hash
+        if grouped_by_tx_actions.get(tx_hash) is None:
+            grouped_by_tx_actions[tx_hash] = []
+        grouped_by_tx_actions[tx_hash].append(action.to_dict())
+    grouped_actions = list(map(lambda key: grouped_by_tx_actions[key], grouped_by_tx_actions))
 
-        # Filter out pool share transfer
-        grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0]['action_type'] == 'transfer'), grouped_actions))
+    # Filter out pool share transfer
+    grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0]['action_type'] == 'transfer'), grouped_actions))
 
-        # with open("{}/grouped_actions.pickle".format(args.pool_address), "rb") as f:
-        #     grouped_actions = pickle.load(f)
+    # with open("{}/grouped_actions.pickle".format(args.pool_address), "rb") as f:
+    #     grouped_actions = pickle.load(f)
 
-        actions_final = stage3_merge_actions(args.pool_address, grouped_actions)
-        actions_filename = args.pool_address + "-actions.json"
-        print("saving to", actions_filename)
-        with open(actions_filename, 'w') as f:
-            json.dump(actions_final, f, indent="\t")
+    actions_final = stage3_merge_actions(args.pool_address, grouped_actions)
+    actions_filename = args.pool_address + "-actions.json"
+    print("saving to", actions_filename)
+    with open(actions_filename, 'w') as f:
+        json.dump(actions_final, f, indent="\t")
 
 
 from ipdb import launch_ipdb_on_exception
