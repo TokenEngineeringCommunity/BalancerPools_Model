@@ -8,7 +8,7 @@ def ensure_type(value, types):
             value=value, value_type=type(value), types=types))
 
 class Token:
-    def __init__(self, weight: float, denorm_weight: float, balance: Decimal, bound: bool):
+    def __init__(self, weight: Decimal, denorm_weight: Decimal, balance: Decimal, bound: bool):
         self.weight = weight
         self.denorm_weight = denorm_weight
         self.balance = balance
