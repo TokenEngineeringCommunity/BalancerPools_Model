@@ -9,6 +9,7 @@ from decimal import Decimal
 from model.parts.balancer_math import BalancerMath
 from model.models import Token
 
+
 def generate_initial_state(initial_values_json: str, spot_price_base_currency: str) -> typing.Dict:
     with open(initial_values_json, "r") as f:
         initial_values = json.load(f, object_hook=token_finding_hook)
@@ -21,13 +22,14 @@ def generate_initial_state(initial_values_json: str, spot_price_base_currency: s
         base_token = initial_values['pool']['tokens'][spot_price_base_currency]
         other_token = initial_values['pool']['tokens'][t]
 
-        spot_prices[t] = BalancerMath.calc_spot_price(token_balance_in=other_token.balance,
-                                                token_weight_in=Decimal(other_token.denorm_weight),
-                                                token_balance_out=base_token.balance,
-                                                token_weight_out=Decimal(base_token.denorm_weight),
-                                                swap_fee=Decimal(initial_values['pool']['swap_fee']))
+        spot_prices[t] = BalancerMath.calc_spot_price(token_balance_in=base_token.balance,
+                                                      token_weight_in=Decimal(base_token.denorm_weight),
+                                                      token_balance_out=other_token.balance,
+                                                      token_weight_out=Decimal(other_token.denorm_weight),
+                                                      swap_fee=Decimal(initial_values['pool']['swap_fee']))
     initial_values["spot_prices"] = spot_prices
     return initial_values
+
 
 def token_finding_hook(k):
     if "weight" in k and "denorm_weight" in k and "balance" in k and "bound" in k:

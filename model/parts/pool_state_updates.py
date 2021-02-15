@@ -10,16 +10,16 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
     return 'pool', pool
 
 
-def calculate_spot_prices(pool: dict, ref_token: str, ):
+def calculate_spot_prices(pool: dict, ref_token: str):
     swap_fee = pool['swap_fee']
-    balance_out = pool['tokens'][ref_token]['balance']
-    weight_out = pool['tokens'][ref_token]['weight']
+    balance_in = pool['tokens'][ref_token].balance
+    weight_in = pool['tokens'][ref_token].weight
     spot_prices = {}
     for token in pool['tokens']:
         if token == ref_token:
             continue
-        balance_in = pool['tokens'][ref_token]['balance']
-        weight_in = pool['tokens'][ref_token]['weight']
+        balance_out = pool['tokens'][token].balance
+        weight_out = pool['tokens'][token].weight
 
         price = BalancerMath.calc_spot_price(token_balance_in=Decimal(balance_in),
                                              token_weight_in=Decimal(weight_in),
@@ -38,5 +38,5 @@ def s_update_spot_prices(params, substep, state_history, previous_state, policy_
     ref_token = params[0]['spot_price_reference']
 
     spot_prices = calculate_spot_prices(pool, ref_token)
-
+    print(spot_prices)
     return 'spot_prices', spot_prices
