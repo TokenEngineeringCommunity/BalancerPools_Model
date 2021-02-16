@@ -54,36 +54,31 @@ def query(client, sql: str) -> pd.DataFrame:
     )
     return result
 
-def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
-    filename = "{}/{}.pickle".format(pool_address, event_type)
-    print("Pickling to", filename)
-    if not os.path.exists(args.pool_address):
-        os.mkdir(pool_address)
-    with open(filename, 'wb') as f:
-        pickle.dump(df, f)
+def load_json(path):
+    with open(path, 'r') as f:
+        return json.load(f)
 
-def load_pickles(pool_address: str, event_type: str) -> pd.DataFrame:
-    filename = "{}/{}.pickle".format(pool_address, event_type)
-    print("Unpickling from", filename)
-    with open(filename, 'rb') as f:
+def save_json(x, path, indent=True):
+    with open(path, 'w') as f:
+        if indent:
+            json.dump(x, f, indent='\t')
+        else:
+            json.dump(x, f)
+    print("Saved to", path)
+
+def load_pickle(path):
+    print("Unpickling from", path)
+    with open(path, 'rb') as f:
         return pickle.load(f)
 
-def load_txhash_contractcalls(pool_address: str) -> typing.Dict:
-    filename = "{}/txhash_contractcalls.json".format(pool_address)
-    print("Using backed up tx receipts from", filename)
-    try:
-        with open(filename, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
+def save_pickle(x, path):
+    print("Pickling to", path)
+    with open(path, 'wb') as f:
+        return pickle.dump(x, f)
 
-def save_txhash_contractcalls(pool_address: str, tx_receipts: typing.Dict):
-    filename = "{}/txhash_contractcalls.json".format(pool_address)
-    print("Saving tx receipts to", filename)
-    if not os.path.exists(args.pool_address):
-        os.mkdir(pool_address)
-    with open(filename, 'w') as f:
-        return json.dump(tx_receipts, f)
+def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
+    filename = f"{pool_address}/{event_type}.pickle"
+    save_pickle(df, filename)
 
 def query_and_save(client, pool_address: str, event_type: str, sql: str, writer) -> pd.DataFrame:
     df = query(client, sql)
@@ -221,38 +216,40 @@ def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFra
 
 def stage1_load_sql_data(pool_address: str):
     try:
-        new_results = load_pickles(args.pool_address, "new")
-        join_results = load_pickles(args.pool_address, "join")
-        swap_results = load_pickles(args.pool_address, "swap")
-        exit_results = load_pickles(args.pool_address, "exit")
-        transfer_results = load_pickles(args.pool_address, "transfer")
-        fees_results = load_pickles(args.pool_address, "fees")
-        denorms_results = load_pickles(args.pool_address, "denorms")
+        new_results = load_pickle(f"{pool_address}/new.pickle")
+        join_results = load_pickle(f"{pool_address}/join.pickle")
+        swap_results = load_pickle(f"{pool_address}/swap.pickle")
+        exit_results = load_pickle(f"{pool_address}/exit.pickle")
+        transfer_results = load_pickle(f"{pool_address}/transfer.pickle")
+        fees_results = load_pickle(f"{pool_address}/fees.pickle")
+        denorms_results = load_pickle(f"{pool_address}/denorms.pickle")
     except FileNotFoundError:
         print("Pickle files were missing, redownloading from Bigquery Ethereum ETL")
-        new_sql = 'select * from blockchain-etl.ethereum_balancer.BFactory_event_LOG_NEW_POOL where pool="{}"'.format(args.pool_address)
+        new_sql = 'select * from blockchain-etl.ethereum_balancer.BFactory_event_LOG_NEW_POOL where pool="{}"'.format(pool_address)
         swap_sql = 'select * from blockchain-etl.ethereum_balancer.BPool_event_LOG_SWAP where contract_address="{}" order by block_number'.format(
-            args.pool_address)
+            pool_address)
         join_sql = 'select * from blockchain-etl.ethereum_balancer.BPool_event_LOG_JOIN where contract_address="{}" order by block_number'.format(
-            args.pool_address)
+            pool_address)
         exit_sql = 'select * from blockchain-etl.ethereum_balancer.BPool_event_LOG_EXIT where contract_address="{}" order by block_number'.format(
-            args.pool_address)
+            pool_address)
         transfer_sql = 'select * from blockchain-etl.ethereum_balancer.BPool_event_Transfer where contract_address="{}" order by block_number'.format(
-            args.pool_address)
+            pool_address)
         with open("view_pools_fees.sql", "r") as f:
-            fees_sql = f.read().format(args.pool_address)
+            fees_sql = f.read().format(pool_address)
         with open("view_pools_tokens_denorm_weights.sql", "r") as f:
-            denorms_sql = f.read().format(args.pool_address)
+            denorms_sql = f.read().format(pool_address)
 
         client = bigquery.Client()
+        if not os.path.exists(pool_address):
+            os.mkdir(pool_address)
 
-        new_results = query_and_save(client, args.pool_address, "new", new_sql, save_queries_pickle)
-        join_results = query_and_save(client, args.pool_address, "join", join_sql, save_queries_pickle)
-        swap_results = query_and_save(client, args.pool_address, "swap", swap_sql, save_queries_pickle)
-        exit_results = query_and_save(client, args.pool_address, "exit", exit_sql, save_queries_pickle)
-        transfer_results = query_and_save(client, args.pool_address, "transfer", transfer_sql, save_queries_pickle)
-        fees_results = query_and_save(client, args.pool_address, "fees", fees_sql, save_queries_pickle)
-        denorms_results = query_and_save(client, args.pool_address, "denorms", denorms_sql, save_queries_pickle)
+        new_results = query_and_save(client, pool_address, "new", new_sql, save_queries_pickle)
+        join_results = query_and_save(client, pool_address, "join", join_sql, save_queries_pickle)
+        swap_results = query_and_save(client, pool_address, "swap", swap_sql, save_queries_pickle)
+        exit_results = query_and_save(client, pool_address, "exit", exit_sql, save_queries_pickle)
+        transfer_results = query_and_save(client, pool_address, "transfer", transfer_sql, save_queries_pickle)
+        fees_results = query_and_save(client, pool_address, "fees", fees_sql, save_queries_pickle)
+        denorms_results = query_and_save(client, pool_address, "denorms", denorms_sql, save_queries_pickle)
 
     new_results.set_index("block_number", inplace=True)
     join_results.set_index("block_number", inplace=True)
@@ -264,7 +261,7 @@ def stage1_load_sql_data(pool_address: str):
 
     return new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results
 
-def stage2_produce_initial_state(new_results, fees_results, transfer_results):
+def stage2_produce_initial_state(new_results, fees_results, transfer_results) -> typing.Dict:
     tokens = get_initial_token_distribution(new_results)
     swap_fee_weis = int(fees_results.iloc[0]['swapFee'])
     swap_fee = Web3.fromWei(swap_fee_weis, 'ether')
@@ -280,14 +277,15 @@ def stage2_produce_initial_state(new_results, fees_results, transfer_results):
         'action_type': 'pool_creation',
         'change_datetime': creation_date
     }
-    print(initial_states)
-    initial_states_filename = args.pool_address + "-initial_pool_states.json"
-    with open(initial_states_filename, 'w') as f:
-        json.dump(initial_states, f, indent="\t")
-        print("Saved to", initial_states_filename)
+    return initial_states
 
 def stage3_merge_actions(pool_address, grouped_actions):
-    tx_receipts = load_txhash_contractcalls(pool_address)
+    filename = f"{pool_address}/txhash_contractcalls.json"
+    try:
+        tx_receipts = load_json(filename)
+    except FileNotFoundError:
+        print("No tx receipts found, going to query NODE_URL. This will be slow")
+        tx_receipts = {}
 
     actions_final = []
     for group in grouped_actions:
@@ -312,10 +310,113 @@ def stage3_merge_actions(pool_address, grouped_actions):
         merged_action['action'] = classify_actions(group)
         actions_final.append(merged_action)
 
-    save_txhash_contractcalls(pool_address, tx_receipts)
+    print("Backing up tx receipts to", filename)
+    save_json(tx_receipts, filename, indent=False)
 
     actions_final.sort(key=lambda a: a['timestamp'])
     return actions_final
+
+def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol: str, initial_state: typing.Dict, actions: typing.List[typing.Dict]):
+    def parse_price_feeds(token_symbols: []) -> []:
+        if len(price_feed_paths) != len(token_symbols):
+            raise Exception('Number of pricefeeds and tokens is different')
+        result_df = None
+        for idx, path in enumerate(price_feed_paths):
+            token = token_symbols[idx]
+            print('Reading', path)
+            parsed_price_feed = pd.read_csv(path, sep=';')
+            parsed_price_feed[f'{token}'] = parsed_price_feed.apply(lambda row: (row.open + row.close) / 2, axis=1)
+            if result_df is None:
+                result_df = parsed_price_feed.filter(['time', f'{token}'], axis=1)
+                result_df.rename(columns={'time': 'timestamp'}, inplace=True)
+                result_df['timestamp'] = pd.to_datetime(result_df['timestamp'])
+            else:
+                result_df[f'{token}'] = parsed_price_feed[f'{token}']
+
+        def generate_action(row):
+            result = {'type': 'external_price_update', 'tokens': {}}
+            for index, value in row.items():
+                if index in token_symbols:
+                    result['tokens'][index] = value
+            return result
+
+        result_df['action'] = result_df.apply(generate_action, axis=1)
+        actions = result_df['action'].to_list()
+        datetimes = result_df['timestamp'].to_list()
+        result = []
+        for idx, action in enumerate(actions):
+            skip = False
+            for token in action['tokens']:
+                skip = math.isnan(action['tokens'][token])
+            if skip:
+                continue
+            result.append({
+                'timestamp': datetimes[idx],
+                'fiat_currency': fiat_symbol,
+                'action': action
+            })
+
+        return result
+
+    def get_price_feeds_tokens():
+        with open(f'{pool_address}-initial_pool_states.json', "r") as read_file:
+            initial_states = json.load(read_file)
+            tokens = initial_states['pool']['tokens']
+            token_symbols = []
+            feeds_file_paths = []
+            price_feeds = os.listdir(f'./{pool_address}-prices')
+            for feed_name in price_feeds:
+                for token in tokens:
+                    p = re.compile(token)
+                    result = p.search(feed_name)
+                    if result:
+                        token_symbols.append(token)
+                        feeds_file_paths.append(f'./{pool_address}-prices/{feed_name}')
+            return feeds_file_paths, token_symbols
+
+    def add_price_feeds_to_actions(actions: typing.List[typing.Dict]) -> typing.List[typing.Dict]:
+        actions.extend(price_actions)
+        def equalize_date_types(action):
+            if isinstance(action['timestamp'], str):
+                action['timestamp'] = dateutil.parser.isoparse(action['timestamp'])
+            else:
+                action['timestamp'] = action['timestamp'].to_pydatetime()
+            return action
+        actions = list(map(equalize_date_types, actions))
+        actions.sort(key=lambda x: x['timestamp'])
+
+        def convert_to_iso_str(action):
+            action['timestamp'] = action['timestamp'].isoformat()
+            return action
+
+        actions = list(map(convert_to_iso_str, actions))
+
+        # Remove prices before pool creation. First action must be pool creation
+        while actions[0]['action']['type'] != 'pool_creation':
+            actions.pop(0)
+
+        return actions
+
+    def add_price_feeds_to_initial_state(price_actions, initial_state) -> typing.Dict:
+        initial_prices = price_actions[0]
+        print(initial_prices)
+        initial_state['token_prices'] = initial_prices['action']['tokens']
+        return initial_state
+        initial_states_filenames = f'{pool_address}-initial_pool_states-prices.json'
+        print("saving to", initial_states_filenames)
+        with open(initial_states_filenames, 'w') as f:
+            json.dump(initial_state, f, indent="\t")
+
+    price_feed_paths, tokens = get_price_feeds_tokens()
+    print(price_feed_paths)
+    print(tokens)
+
+    price_actions = parse_price_feeds(token_symbols=tokens)
+    initial_state_w_prices = add_price_feeds_to_initial_state()
+    actions_w_prices = add_price_feeds_to_actions()
+
+    save_json(initial_state_w_prices, f'{pool_address}-initial_pool_states-prices.json')
+    save_json(actions_w_prices, f'{pool_address}-actions-prices.json')
 
 def produce_actions():
     new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results = stage1_load_sql_data(args.pool_address)
@@ -336,7 +437,8 @@ def produce_actions():
     # Pandas, please don't truncate columns when I print them out
     pd.set_option('display.max_colwidth', None)
 
-    stage2_produce_initial_state(new_results, fees_results, transfer_results)
+    initial_state = stage2_produce_initial_state(new_results, fees_results, transfer_results)
+    save_json(initial_state, args.pool_address + "-initial_pool_states.json")
 
     actions = []
     actions.extend(turn_events_into_actions(new_results, fees_dict, denorms_results))
@@ -356,15 +458,14 @@ def produce_actions():
     # Filter out pool share transfer
     grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0]['action_type'] == 'transfer'), grouped_actions))
 
-    # with open("{}/grouped_actions.pickle".format(args.pool_address), "rb") as f:
-    #     grouped_actions = pickle.load(f)
+    # save_pickle(grouped_actions, "{}/grouped_actions.pickle".format(args.pool_address))
+    # grouped_actions = load_pickle("{}/grouped_actions.pickle".format(args.pool_address))
 
     actions_final = stage3_merge_actions(args.pool_address, grouped_actions)
-    actions_filename = args.pool_address + "-actions.json"
-    print("saving to", actions_filename)
-    with open(actions_filename, 'w') as f:
-        json.dump(actions_final, f, indent="\t")
+    save_json(actions_final, f"{args.pool_address}-actions.json")
 
+    # save_pickle(actions_final, f"{args.pool_address}/actions_final.pickle")
+    # actions_final = load_pickle(f"{args.pool_address}/actions_final.pickle")
 
 from ipdb import launch_ipdb_on_exception
 
