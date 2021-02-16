@@ -1,8 +1,12 @@
+import glob
 import typing
 import argparse
 import json
 import os
 import pickle
+import re
+import math
+import dateutil
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from web3 import Web3, HTTPProvider
@@ -358,21 +362,19 @@ def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol
 
         return result
 
-    def get_price_feeds_tokens():
-        with open(f'{pool_address}-initial_pool_states.json', "r") as read_file:
-            initial_states = json.load(read_file)
-            tokens = initial_states['pool']['tokens']
-            token_symbols = []
-            feeds_file_paths = []
-            price_feeds = os.listdir(f'./{pool_address}-prices')
-            for feed_name in price_feeds:
-                for token in tokens:
-                    p = re.compile(token)
-                    result = p.search(feed_name)
-                    if result:
-                        token_symbols.append(token)
-                        feeds_file_paths.append(f'./{pool_address}-prices/{feed_name}')
-            return feeds_file_paths, token_symbols
+    def get_price_feeds_tokens(initial_state: typing.Dict):
+        tokens = initial_state['pool']['tokens']
+        token_symbols = []
+        feeds_file_paths = []
+        price_feeds = glob.glob(f'./{pool_address}/*.csv')
+        for feed_name in price_feeds:
+            for token in tokens:
+                p = re.compile(token)
+                result = p.search(feed_name)
+                if result:
+                    token_symbols.append(token)
+                    feeds_file_paths.append(feed_name)
+        return feeds_file_paths, token_symbols
 
     def add_price_feeds_to_actions(actions: typing.List[typing.Dict]) -> typing.List[typing.Dict]:
         actions.extend(price_actions)
@@ -388,7 +390,6 @@ def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol
         def convert_to_iso_str(action):
             action['timestamp'] = action['timestamp'].isoformat()
             return action
-
         actions = list(map(convert_to_iso_str, actions))
 
         # Remove prices before pool creation. First action must be pool creation
@@ -399,24 +400,17 @@ def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol
 
     def add_price_feeds_to_initial_state(price_actions, initial_state) -> typing.Dict:
         initial_prices = price_actions[0]
-        print(initial_prices)
         initial_state['token_prices'] = initial_prices['action']['tokens']
         return initial_state
-        initial_states_filenames = f'{pool_address}-initial_pool_states-prices.json'
-        print("saving to", initial_states_filenames)
-        with open(initial_states_filenames, 'w') as f:
-            json.dump(initial_state, f, indent="\t")
 
-    price_feed_paths, tokens = get_price_feeds_tokens()
-    print(price_feed_paths)
-    print(tokens)
+    price_feed_paths, tokens = get_price_feeds_tokens(initial_state)
 
     price_actions = parse_price_feeds(token_symbols=tokens)
-    initial_state_w_prices = add_price_feeds_to_initial_state()
-    actions_w_prices = add_price_feeds_to_actions()
+    initial_state_w_prices = add_price_feeds_to_initial_state(price_actions, initial_state)
+    actions_w_prices = add_price_feeds_to_actions(actions)
 
-    save_json(initial_state_w_prices, f'{pool_address}-initial_pool_states-prices.json')
-    save_json(actions_w_prices, f'{pool_address}-actions-prices.json')
+    return initial_state_w_prices, actions_w_prices
+
 
 def produce_actions():
     new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results = stage1_load_sql_data(args.pool_address)
@@ -439,6 +433,7 @@ def produce_actions():
 
     initial_state = stage2_produce_initial_state(new_results, fees_results, transfer_results)
     save_json(initial_state, args.pool_address + "-initial_pool_states.json")
+    # initial_state = load_json(args.pool_address + "-initial_pool_states.json")
 
     actions = []
     actions.extend(turn_events_into_actions(new_results, fees_dict, denorms_results))
@@ -466,6 +461,10 @@ def produce_actions():
 
     # save_pickle(actions_final, f"{args.pool_address}/actions_final.pickle")
     # actions_final = load_pickle(f"{args.pool_address}/actions_final.pickle")
+
+    initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, "DAI", initial_state, actions_final)
+    save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json')
+    save_json(actions_w_prices, f'{args.pool_address}-actions-prices.json')
 
 from ipdb import launch_ipdb_on_exception
 
