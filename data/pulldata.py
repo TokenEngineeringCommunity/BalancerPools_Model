@@ -17,7 +17,7 @@ from google.cloud import bigquery
 from decimal import Decimal
 
 parser = argparse.ArgumentParser(prog="pulldata",
-                                 description="Ask Google Bigquery about a particular Balancer pool. Remember to set GOOGLE_APPLICATION_CREDENTIALS from https://cloud.google.com/docs/authentication/getting-started")
+                                 description="Ask Google Bigquery about a particular Balancer pool. Remember to set GOOGLE_APPLICATION_CREDENTIALS from https://cloud.google.com/docs/authentication/getting-started and export NODE_URL to a Geth node to get transaction receipts")
 parser.add_argument("pool_address")
 args = parser.parse_args()
 w3 = Web3(Web3.HTTPProvider(os.environ['NODE_URL']))
