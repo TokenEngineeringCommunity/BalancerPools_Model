@@ -23,7 +23,9 @@ from decimal import Decimal
 parser = argparse.ArgumentParser(prog="pulldata",
                                  description="Ask Google Bigquery about a particular Balancer pool. Remember to set GOOGLE_APPLICATION_CREDENTIALS from https://cloud.google.com/docs/authentication/getting-started and export NODE_URL to a Geth node to get transaction receipts")
 parser.add_argument("pool_address")
+parser.add_argument("--fiat", "-f")
 args = parser.parse_args()
+import ipdb; ipdb.set_trace()
 w3 = Web3(Web3.HTTPProvider(os.environ['NODE_URL']))
 erc20_info_getter = ERC20InfoReader(w3)
 log_call_parser = BPoolLogCallParser(erc20_info_getter)
@@ -462,9 +464,12 @@ def produce_actions():
     # save_pickle(actions_final, f"{args.pool_address}/actions_final.pickle")
     # actions_final = load_pickle(f"{args.pool_address}/actions_final.pickle")
 
-    initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, "DAI", initial_state, actions_final)
-    save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json')
-    save_json(actions_w_prices, f'{args.pool_address}-actions-prices.json')
+    if args.fiat:
+        initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, args.fiat, initial_state, actions_final)
+        save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json')
+        save_json(actions_w_prices, f'{args.pool_address}-actions-prices.json')
+    else:
+        print("Fiat base for token prices not given - skipping price data injection")
 
 from ipdb import launch_ipdb_on_exception
 
