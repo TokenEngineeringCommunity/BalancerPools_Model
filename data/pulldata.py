@@ -220,7 +220,16 @@ def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFra
     return actions
 
 def stage1_load_sql_data(pool_address: str):
-    if not os.path.exists(args.pool_address):
+    try:
+        new_results = load_pickles(args.pool_address, "new")
+        join_results = load_pickles(args.pool_address, "join")
+        swap_results = load_pickles(args.pool_address, "swap")
+        exit_results = load_pickles(args.pool_address, "exit")
+        transfer_results = load_pickles(args.pool_address, "transfer")
+        fees_results = load_pickles(args.pool_address, "fees")
+        denorms_results = load_pickles(args.pool_address, "denorms")
+    except FileNotFoundError:
+        print("Pickle files were missing, redownloading from Bigquery Ethereum ETL")
         new_sql = 'select * from blockchain-etl.ethereum_balancer.BFactory_event_LOG_NEW_POOL where pool="{}"'.format(args.pool_address)
         swap_sql = 'select * from blockchain-etl.ethereum_balancer.BPool_event_LOG_SWAP where contract_address="{}" order by block_number'.format(
             args.pool_address)
@@ -245,14 +254,13 @@ def stage1_load_sql_data(pool_address: str):
         fees_results = query_and_save(client, args.pool_address, "fees", fees_sql, save_queries_pickle)
         denorms_results = query_and_save(client, args.pool_address, "denorms", denorms_sql, save_queries_pickle)
 
-    else:
-        new_results = load_pickles(args.pool_address, "new").set_index("block_number")
-        join_results = load_pickles(args.pool_address, "join").set_index("block_number")
-        swap_results = load_pickles(args.pool_address, "swap").set_index("block_number")
-        exit_results = load_pickles(args.pool_address, "exit").set_index("block_number")
-        transfer_results = load_pickles(args.pool_address, "transfer").set_index("block_number")
-        fees_results = load_pickles(args.pool_address, "fees").set_index("block_number")
-        denorms_results = load_pickles(args.pool_address, "denorms").set_index("block_number")
+    new_results.set_index("block_number", inplace=True)
+    join_results.set_index("block_number", inplace=True)
+    swap_results.set_index("block_number", inplace=True)
+    exit_results.set_index("block_number", inplace=True)
+    transfer_results.set_index("block_number", inplace=True)
+    fees_results.set_index("block_number", inplace=True)
+    denorms_results.set_index("block_number", inplace=True)
 
     return new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results
 
