@@ -1,8 +1,12 @@
+import glob
 import typing
 import argparse
 import json
 import os
 import pickle
+import re
+import math
+import dateutil
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from web3 import Web3, HTTPProvider
@@ -17,9 +21,11 @@ from google.cloud import bigquery
 from decimal import Decimal
 
 parser = argparse.ArgumentParser(prog="pulldata",
-                                 description="Ask Google Bigquery about a particular Balancer pool. Remember to set GOOGLE_APPLICATION_CREDENTIALS from https://cloud.google.com/docs/authentication/getting-started")
+                                 description="Ask Google Bigquery about a particular Balancer pool. Remember to set GOOGLE_APPLICATION_CREDENTIALS from https://cloud.google.com/docs/authentication/getting-started and export NODE_URL to a Geth node to get transaction receipts")
 parser.add_argument("pool_address")
+parser.add_argument("--fiat", "-f")
 args = parser.parse_args()
+import ipdb; ipdb.set_trace()
 w3 = Web3(Web3.HTTPProvider(os.environ['NODE_URL']))
 erc20_info_getter = ERC20InfoReader(w3)
 log_call_parser = BPoolLogCallParser(erc20_info_getter)
@@ -54,42 +60,36 @@ def query(client, sql: str) -> pd.DataFrame:
     )
     return result
 
+def load_json(path):
+    with open(path, 'r') as f:
+        return json.load(f)
 
-def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
-    filename = "{}/{}.pickle".format(pool_address, event_type)
-    print("Pickling to", filename)
-    if not os.path.exists(args.pool_address):
-        os.mkdir(pool_address)
-    with open(filename, 'wb') as f:
-        pickle.dump(df, f)
+def save_json(x, path, indent=True):
+    with open(path, 'w') as f:
+        if indent:
+            json.dump(x, f, indent='\t')
+        else:
+            json.dump(x, f)
+    print("Saved to", path)
 
-
-def load_pickles(pool_address: str, event_type: str) -> pd.DataFrame:
-    filename = "{}/{}.pickle".format(pool_address, event_type)
-    print("Unpickling from", filename)
-    with open(filename, 'rb') as f:
+def load_pickle(path):
+    print("Unpickling from", path)
+    with open(path, 'rb') as f:
         return pickle.load(f)
 
-def load_txhash_contractcalls(pool_address: str) -> typing.Dict:
-    filename = "{}/txhash_contractcalls.json".format(pool_address)
-    print("Using backed up tx receipts from", filename)
-    try:
-        with open(filename, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
+def save_pickle(x, path):
+    print("Pickling to", path)
+    with open(path, 'wb') as f:
+        return pickle.dump(x, f)
 
-def save_txhash_contractcalls(pool_address: str, tx_receipts: typing.Dict):
-    filename = "{}/txhash_contractcalls.json".format(pool_address)
-    print("Saving tx receipts to", filename)
-    if not os.path.exists(args.pool_address):
-        os.mkdir(pool_address)
-    with open(filename, 'w') as f:
-        return json.dump(tx_receipts, f)
+def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
+    filename = f"{pool_address}/{event_type}.pickle"
+    save_pickle(df, filename)
 
-def query_and_save(client, pool_address: str, event_type: str, sql: str, writer):
+def query_and_save(client, pool_address: str, event_type: str, sql: str, writer) -> pd.DataFrame:
     df = query(client, sql)
     writer(pool_address, event_type, df)
+    return df
 
 def get_initial_token_distribution(new_results) -> dict:
     receipt = w3.eth.getTransactionReceipt(new_results.iloc[0]['transaction_hash'])
@@ -115,36 +115,11 @@ def get_initial_token_distribution(new_results) -> dict:
         token['weight'] = str(denorm / total_denorm_weight)
     return tokens
 
-
 def get_initial_pool_share(transfer_results, tx_hash):
     initial_tx_transfers = transfer_results.loc[transfer_results['transaction_hash'] == tx_hash]
     minting = initial_tx_transfers.loc[initial_tx_transfers['src'] == '0x0000000000000000000000000000000000000000']
     wei_amount = int(minting.iloc[0]['amt'])
     return Web3.fromWei(wei_amount, 'ether')
-
-
-def produce_initial_state(new_results, fees_results, transfer_results):
-    tokens = get_initial_token_distribution(new_results)
-    swap_fee_weis = int(fees_results.iloc[0]['swapFee'])
-    swap_fee = Web3.fromWei(swap_fee_weis, 'ether')
-    pool_shares = get_initial_pool_share(transfer_results, new_results.iloc[0]['transaction_hash'])
-    creation_date = new_results.iloc[0]['block_timestamp'].isoformat()
-    initial_states = {
-        'pool': {
-            'tokens': tokens,
-            'generated_fees': 0.0,
-            'pool_shares': str(pool_shares),
-            'swap_fee': str(swap_fee)
-        },
-        'action_type': 'pool_creation',
-        'change_datetime': creation_date
-    }
-    print(initial_states)
-    initial_states_filename = args.pool_address + "-initial_pool_states.json"
-    print("saving to", initial_states_filename)
-    with open(initial_states_filename, 'w') as f:
-        json.dump(initial_states, f, indent="\t")
-
 
 def format_denorms(denorms: dict) -> typing.List[typing.Dict]:
     """
@@ -161,7 +136,6 @@ def format_denorms(denorms: dict) -> typing.List[typing.Dict]:
         d.append(a)
     return d
 
-
 def classify_pool_share_transfers(transfers: []) -> (str, str):
     pool_share_burnt = list(filter(lambda x: x['dst'] == ZERO_ADDRESS, transfers))
     if len(pool_share_burnt) > 0:
@@ -170,7 +144,6 @@ def classify_pool_share_transfers(transfers: []) -> (str, str):
     if len(pool_share_minted) > 0:
         return 'pool_amount_out', str(Web3.fromWei(int(pool_share_minted[0]['amt']), 'ether'))
     raise Exception('not pool share mint or burn', transfers)
-
 
 def map_token_amounts(txs: [], address_key: str, amount_key: str):
     def map_tx(x):
@@ -181,7 +154,6 @@ def map_token_amounts(txs: [], address_key: str, amount_key: str):
         return mapped
 
     return list(map(map_tx, txs))
-
 
 def classify_actions(group):
     action = {}
@@ -226,151 +198,280 @@ def classify_actions(group):
         action['type'] = 'exit_swap'
     return action
 
+def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFrame) -> typing.List[Action]:
+    actions = []
+    grouped = events_list.groupby("transaction_hash")
+    for txhash, events in grouped:
+        # Get basic info from first event log, no matter how many there actually are
+        first_event_log = events.iloc[0]
+        ts = first_event_log["block_timestamp"]
+        tx_hash = first_event_log["transaction_hash"]
+        block_number = first_event_log.name
 
-def produce_actions():
-    if not os.path.exists(args.pool_address):
-        new_sql = 'select * from blockchain-etl.ethereum_balancer.BFactory_event_LOG_NEW_POOL where pool="{}"'.format(args.pool_address)
+        # Invariant data that exists parallel to these actions. Merge them
+        # into the same Action object as a "context" for convenience.
+        fee = fees[block_number]
+        denorm = format_denorms(denorms.loc[block_number].to_dict(orient="records"))
+        # convert block_number and swap_fee to string to painlessly
+        # convert to JSON later (numpy.int64 can't be JSON serialized)
+        a = Action(timestamp=ts.to_pydatetime(), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
+                    denorms=denorm, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
+        actions.append(a)
+
+    return actions
+
+def stage1_load_sql_data(pool_address: str):
+    try:
+        new_results = load_pickle(f"{pool_address}/new.pickle")
+        join_results = load_pickle(f"{pool_address}/join.pickle")
+        swap_results = load_pickle(f"{pool_address}/swap.pickle")
+        exit_results = load_pickle(f"{pool_address}/exit.pickle")
+        transfer_results = load_pickle(f"{pool_address}/transfer.pickle")
+        fees_results = load_pickle(f"{pool_address}/fees.pickle")
+        denorms_results = load_pickle(f"{pool_address}/denorms.pickle")
+    except FileNotFoundError:
+        print("Pickle files were missing, redownloading from Bigquery Ethereum ETL")
+        new_sql = 'select * from blockchain-etl.ethereum_balancer.BFactory_event_LOG_NEW_POOL where pool="{}"'.format(pool_address)
         swap_sql = 'select * from blockchain-etl.ethereum_balancer.BPool_event_LOG_SWAP where contract_address="{}" order by block_number'.format(
-            args.pool_address)
+            pool_address)
         join_sql = 'select * from blockchain-etl.ethereum_balancer.BPool_event_LOG_JOIN where contract_address="{}" order by block_number'.format(
-            args.pool_address)
+            pool_address)
         exit_sql = 'select * from blockchain-etl.ethereum_balancer.BPool_event_LOG_EXIT where contract_address="{}" order by block_number'.format(
-            args.pool_address)
+            pool_address)
         transfer_sql = 'select * from blockchain-etl.ethereum_balancer.BPool_event_Transfer where contract_address="{}" order by block_number'.format(
-            args.pool_address)
+            pool_address)
         with open("view_pools_fees.sql", "r") as f:
-            fees_sql = f.read().format(args.pool_address)
+            fees_sql = f.read().format(pool_address)
         with open("view_pools_tokens_denorm_weights.sql", "r") as f:
-            denorms_sql = f.read().format(args.pool_address)
+            denorms_sql = f.read().format(pool_address)
 
         client = bigquery.Client()
+        if not os.path.exists(pool_address):
+            os.mkdir(pool_address)
 
-        query_and_save(client, args.pool_address, "new", new_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "join", join_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "swap", swap_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "exit", exit_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "transfer", transfer_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "fees", fees_sql, save_queries_pickle)
-        query_and_save(client, args.pool_address, "denorms", denorms_sql, save_queries_pickle)
+        new_results = query_and_save(client, pool_address, "new", new_sql, save_queries_pickle)
+        join_results = query_and_save(client, pool_address, "join", join_sql, save_queries_pickle)
+        swap_results = query_and_save(client, pool_address, "swap", swap_sql, save_queries_pickle)
+        exit_results = query_and_save(client, pool_address, "exit", exit_sql, save_queries_pickle)
+        transfer_results = query_and_save(client, pool_address, "transfer", transfer_sql, save_queries_pickle)
+        fees_results = query_and_save(client, pool_address, "fees", fees_sql, save_queries_pickle)
+        denorms_results = query_and_save(client, pool_address, "denorms", denorms_sql, save_queries_pickle)
 
-    else:
-        new_results = load_pickles(args.pool_address, "new").set_index("block_number")
-        join_results = load_pickles(args.pool_address, "join").set_index("block_number")
-        swap_results = load_pickles(args.pool_address, "swap").set_index("block_number")
-        exit_results = load_pickles(args.pool_address, "exit").set_index("block_number")
-        transfer_results = load_pickles(args.pool_address, "transfer").set_index("block_number")
-        fees_results = load_pickles(args.pool_address, "fees").set_index("block_number")
-        denorms_results = load_pickles(args.pool_address, "denorms").set_index("block_number")
+    new_results.set_index("block_number", inplace=True)
+    join_results.set_index("block_number", inplace=True)
+    swap_results.set_index("block_number", inplace=True)
+    exit_results.set_index("block_number", inplace=True)
+    transfer_results.set_index("block_number", inplace=True)
+    fees_results.set_index("block_number", inplace=True)
+    denorms_results.set_index("block_number", inplace=True)
 
-        new_results["type"] = "new"
-        join_results["type"] = "join"
-        swap_results["type"] = "swap"
-        exit_results["type"] = "exit"
-        transfer_results["type"] = "transfer"
+    return new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results
 
-        # Later we will drop the column "address" from denorms, because it is
-        # just the pool address - it never changes.
-        denorms_results.drop(["address"], axis=1, inplace=True)
-        # Using loc is slow. To avoid costly lookups by block_number, we convert
-        # swapFee lookups into a dict, and denorms too
-        fees_dict = fees_results.drop("address", axis=1).to_dict()["swapFee"]
+def stage2_produce_initial_state(new_results, fees_results, transfer_results) -> typing.Dict:
+    tokens = get_initial_token_distribution(new_results)
+    swap_fee_weis = int(fees_results.iloc[0]['swapFee'])
+    swap_fee = Web3.fromWei(swap_fee_weis, 'ether')
+    pool_shares = get_initial_pool_share(transfer_results, new_results.iloc[0]['transaction_hash'])
+    creation_date = new_results.iloc[0]['block_timestamp'].isoformat()
+    initial_states = {
+        'pool': {
+            'tokens': tokens,
+            'generated_fees': 0.0,
+            'pool_shares': str(pool_shares),
+            'swap_fee': str(swap_fee)
+        },
+        'action_type': 'pool_creation',
+        'change_datetime': creation_date
+    }
+    return initial_states
 
-        # Pandas, please don't truncate columns when I print them out
-        pd.set_option('display.max_colwidth', None)
+def stage3_merge_actions(pool_address, grouped_actions):
+    filename = f"{pool_address}/txhash_contractcalls.json"
+    try:
+        tx_receipts = load_json(filename)
+    except FileNotFoundError:
+        print("No tx receipts found, going to query NODE_URL. This will be slow")
+        tx_receipts = {}
 
-        produce_initial_state(new_results, fees_results, transfer_results)
+    actions_final = []
+    for group in grouped_actions:
+        merged_action = {
+            "timestamp": group[0]['timestamp'],
+            "tx_hash": group[0]['tx_hash'],
+            "block_number": group[0]['block_number'],
+            "swap_fee": str(Web3.fromWei(int(group[0]['swap_fee']), 'ether')),
+            "denorms": group[0]['denorms']
+        }
+        r = tx_receipts.get(merged_action['tx_hash'])
+        if not r:
+            print('merging tx', merged_action['tx_hash'])
+            time.sleep(0.05)
+            receipt = w3.eth.getTransactionReceipt(merged_action['tx_hash'])
+            input_data = log_call_parser.parse_from_receipt(receipt, pool_address)
+            merged_action['contract_call'] = input_data
+            tx_receipts[merged_action["tx_hash"]] = input_data
+        else:
+            merged_action['contract_call'] = r
 
-        def turn_events_into_actions(events_list):
-            actions = []
-            grouped = events_list.groupby("transaction_hash")
-            for txhash, events in grouped:
-                # Get basic info from first event log, no matter how many there actually are
-                first_event_log = events.iloc[0]
-                ts = first_event_log["block_timestamp"]
-                tx_hash = first_event_log["transaction_hash"]
-                block_number = first_event_log.name
+        merged_action['action'] = classify_actions(group)
+        actions_final.append(merged_action)
 
-                # Invariant data that exists parallel to these actions. Merge them
-                # into the same Action object as a "context" for convenience.
-                fee = fees_dict[block_number]
-                denorms = format_denorms(denorms_results.loc[block_number].to_dict(orient="records"))
-                # convert block_number and swap_fee to string to painlessly
-                # convert to JSON later (numpy.int64 can't be JSON serialized)
-                a = Action(timestamp=ts.to_pydatetime(), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
-                           denorms=denorms, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
-                actions.append(a)
+    print("Backing up tx receipts to", filename)
+    save_json(tx_receipts, filename, indent=False)
 
-            return actions
+    actions_final.sort(key=lambda a: a['timestamp'])
+    return actions_final
 
-        actions = []
-        actions.extend(turn_events_into_actions(new_results))
-        actions.extend(turn_events_into_actions(join_results))
-        actions.extend(turn_events_into_actions(swap_results))
-        actions.extend(turn_events_into_actions(exit_results))
-        actions.extend(turn_events_into_actions(transfer_results))
-
-        grouped_by_tx_actions = {}
-        for i, action in enumerate(actions):
-            tx_hash = actions[i].tx_hash
-            if grouped_by_tx_actions.get(tx_hash) is None:
-                grouped_by_tx_actions[tx_hash] = []
-            grouped_by_tx_actions[tx_hash].append(action.to_dict())
-        grouped_actions = list(map(lambda key: grouped_by_tx_actions[key], grouped_by_tx_actions))
-
-        # Filter out pool share transfer
-        grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0]['action_type'] == 'transfer'), grouped_actions))
-
-        # with open("{}/grouped_actions.pickle".format(args.pool_address), "rb") as f:
-        #     grouped_actions = pickle.load(f)
-        # Combine events
-        pool_address = args.pool_address
-        tx_receipts = load_txhash_contractcalls(pool_address)
-
-        actions_final = []
-        for group in grouped_actions:
-            merged_action = {
-                "timestamp": group[0]['timestamp'],
-                "tx_hash": group[0]['tx_hash'],
-                "block_number": group[0]['block_number'],
-                "swap_fee": str(Web3.fromWei(int(group[0]['swap_fee']), 'ether')),
-                "denorms": group[0]['denorms']
-            }
-            r = tx_receipts.get(merged_action['tx_hash'])
-            if not r:
-                print('merging tx', merged_action['tx_hash'])
-                time.sleep(0.05)
-                receipt = w3.eth.getTransactionReceipt(merged_action['tx_hash'])
-                input_data = log_call_parser.parse_from_receipt(receipt, pool_address)
-                merged_action['contract_call'] = input_data
-                tx_receipts[merged_action["tx_hash"]] = input_data
+def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol: str, initial_state: typing.Dict, actions: typing.List[typing.Dict]):
+    def parse_price_feeds(token_symbols: []) -> []:
+        if len(price_feed_paths) != len(token_symbols):
+            raise Exception('Number of pricefeeds and tokens is different')
+        result_df = None
+        for idx, path in enumerate(price_feed_paths):
+            token = token_symbols[idx]
+            print('Reading', path)
+            parsed_price_feed = pd.read_csv(path, sep=';')
+            parsed_price_feed[f'{token}'] = parsed_price_feed.apply(lambda row: (row.open + row.close) / 2, axis=1)
+            if result_df is None:
+                result_df = parsed_price_feed.filter(['time', f'{token}'], axis=1)
+                result_df.rename(columns={'time': 'timestamp'}, inplace=True)
+                result_df['timestamp'] = pd.to_datetime(result_df['timestamp'])
             else:
-                merged_action['contract_call'] = r
+                result_df[f'{token}'] = parsed_price_feed[f'{token}']
 
-            merged_action['action'] = classify_actions(group)
-            actions_final.append(merged_action)
+        def generate_action(row):
+            result = {'type': 'external_price_update', 'tokens': {}}
+            for index, value in row.items():
+                if index in token_symbols:
+                    result['tokens'][index] = value
+            return result
 
-        save_txhash_contractcalls(pool_address, tx_receipts)
+        result_df['action'] = result_df.apply(generate_action, axis=1)
+        actions = result_df['action'].to_list()
+        datetimes = result_df['timestamp'].to_list()
+        result = []
+        for idx, action in enumerate(actions):
+            skip = False
+            for token in action['tokens']:
+                skip = math.isnan(action['tokens'][token])
+            if skip:
+                continue
+            result.append({
+                'timestamp': datetimes[idx],
+                'fiat_currency': fiat_symbol,
+                'action': action
+            })
 
-        actions_final.sort(key=lambda a: a['timestamp'])
+        return result
 
-        actions_filename = args.pool_address + "-actions.json"
-        print("saving to", actions_filename)
-        with open(actions_filename, 'w') as f:
-            json.dump(actions_final, f, indent="\t")
+    def get_price_feeds_tokens(initial_state: typing.Dict):
+        tokens = initial_state['pool']['tokens']
+        token_symbols = []
+        feeds_file_paths = []
+        price_feeds = glob.glob(f'./{pool_address}/*.csv')
+        for feed_name in price_feeds:
+            for token in tokens:
+                p = re.compile(token)
+                result = p.search(feed_name)
+                if result:
+                    token_symbols.append(token)
+                    feeds_file_paths.append(feed_name)
+        return feeds_file_paths, token_symbols
+
+    def add_price_feeds_to_actions(actions: typing.List[typing.Dict]) -> typing.List[typing.Dict]:
+        actions.extend(price_actions)
+        def equalize_date_types(action):
+            if isinstance(action['timestamp'], str):
+                action['timestamp'] = dateutil.parser.isoparse(action['timestamp'])
+            else:
+                action['timestamp'] = action['timestamp'].to_pydatetime()
+            return action
+        actions = list(map(equalize_date_types, actions))
+        actions.sort(key=lambda x: x['timestamp'])
+
+        def convert_to_iso_str(action):
+            action['timestamp'] = action['timestamp'].isoformat()
+            return action
+        actions = list(map(convert_to_iso_str, actions))
+
+        # Remove prices before pool creation. First action must be pool creation
+        while actions[0]['action']['type'] != 'pool_creation':
+            actions.pop(0)
+
+        return actions
+
+    def add_price_feeds_to_initial_state(price_actions, initial_state) -> typing.Dict:
+        initial_prices = price_actions[0]
+        initial_state['token_prices'] = initial_prices['action']['tokens']
+        return initial_state
+
+    price_feed_paths, tokens = get_price_feeds_tokens(initial_state)
+
+    price_actions = parse_price_feeds(token_symbols=tokens)
+    initial_state_w_prices = add_price_feeds_to_initial_state(price_actions, initial_state)
+    actions_w_prices = add_price_feeds_to_actions(actions)
+
+    return initial_state_w_prices, actions_w_prices
 
 
-import cProfile, pstats, io
-from pstats import SortKey
+def produce_actions():
+    new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results = stage1_load_sql_data(args.pool_address)
 
-pr = cProfile.Profile()
-pr.enable()
+    new_results["type"] = "new"
+    join_results["type"] = "join"
+    swap_results["type"] = "swap"
+    exit_results["type"] = "exit"
+    transfer_results["type"] = "transfer"
+
+    # Later we will drop the column "address" from denorms, because it is
+    # just the pool address - it never changes.
+    denorms_results.drop(["address"], axis=1, inplace=True)
+    # Using loc is slow. To avoid costly lookups by block_number, we convert
+    # swapFee lookups into a dict, and denorms too
+    fees_dict = fees_results.drop("address", axis=1).to_dict()["swapFee"]
+
+    # Pandas, please don't truncate columns when I print them out
+    pd.set_option('display.max_colwidth', None)
+
+    initial_state = stage2_produce_initial_state(new_results, fees_results, transfer_results)
+    save_json(initial_state, args.pool_address + "-initial_pool_states.json")
+    # initial_state = load_json(args.pool_address + "-initial_pool_states.json")
+
+    actions = []
+    actions.extend(turn_events_into_actions(new_results, fees_dict, denorms_results))
+    actions.extend(turn_events_into_actions(join_results, fees_dict, denorms_results))
+    actions.extend(turn_events_into_actions(swap_results, fees_dict, denorms_results))
+    actions.extend(turn_events_into_actions(exit_results, fees_dict, denorms_results))
+    actions.extend(turn_events_into_actions(transfer_results, fees_dict, denorms_results))
+
+    grouped_by_tx_actions = {}
+    for i, action in enumerate(actions):
+        tx_hash = actions[i].tx_hash
+        if grouped_by_tx_actions.get(tx_hash) is None:
+            grouped_by_tx_actions[tx_hash] = []
+        grouped_by_tx_actions[tx_hash].append(action.to_dict())
+    grouped_actions = list(map(lambda key: grouped_by_tx_actions[key], grouped_by_tx_actions))
+
+    # Filter out pool share transfer
+    grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0]['action_type'] == 'transfer'), grouped_actions))
+
+    # save_pickle(grouped_actions, "{}/grouped_actions.pickle".format(args.pool_address))
+    # grouped_actions = load_pickle("{}/grouped_actions.pickle".format(args.pool_address))
+
+    actions_final = stage3_merge_actions(args.pool_address, grouped_actions)
+    save_json(actions_final, f"{args.pool_address}-actions.json")
+
+    # save_pickle(actions_final, f"{args.pool_address}/actions_final.pickle")
+    # actions_final = load_pickle(f"{args.pool_address}/actions_final.pickle")
+
+    if args.fiat:
+        initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, args.fiat, initial_state, actions_final)
+        save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json')
+        save_json(actions_w_prices, f'{args.pool_address}-actions-prices.json')
+    else:
+        print("Fiat base for token prices not given - skipping price data injection")
+
 from ipdb import launch_ipdb_on_exception
 
 with launch_ipdb_on_exception():
     produce_actions()
-pr.disable()
-s = io.StringIO()
-sortby = SortKey.CUMULATIVE
-ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-ps.print_stats(40)
-print(s.getvalue())

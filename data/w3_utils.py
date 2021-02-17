@@ -61,7 +61,7 @@ class ERC20InfoReader:
                 return self.token_mapping.get(address).get('symbol')
         contract = self.get_contract_for(address)
         bsymbol = contract.functions.symbol().call()
-        symbol = Web3.toText(bsymbol)
+        symbol = str(bsymbol)
         self.token_mapping[address] = {'symbol': symbol}
         return symbol
 
