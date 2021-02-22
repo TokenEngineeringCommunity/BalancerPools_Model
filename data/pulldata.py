@@ -1,25 +1,25 @@
-import ipdb
-import glob
-import typing
 import argparse
+import glob
 import json
+import math
 import os
 import pickle
 import re
-import math
-import dateutil
-from dataclasses import dataclass, field
-from dataclasses_json import dataclass_json
-from web3 import Web3, HTTPProvider
-from w3_utils import ERC20InfoReader, BPoolLogCallParser, TransactionReceiptGetter
-from marshmallow import fields
-from datetime import datetime
 import time
-
-import pandas as pd
-from dataclasses_json import dataclass_json, config
-from google.cloud import bigquery
+import typing
+from datetime import datetime
 from decimal import Decimal
+
+import dateutil
+import ipdb
+import pandas as pd
+from action import Action
+from google.cloud import bigquery
+from ipdb import launch_ipdb_on_exception
+from web3 import Web3
+
+from w3_utils import (BPoolLogCallParser, ERC20InfoReader,
+                      TransactionReceiptGetter)
 
 parser = argparse.ArgumentParser(prog="pulldata",
                                  description="Ask Google Bigquery about a particular Balancer pool. Remember to set GOOGLE_APPLICATION_CREDENTIALS from https://cloud.google.com/docs/authentication/getting-started and export NODE_URL to a Geth node to get transaction receipts")
@@ -31,24 +31,6 @@ erc20_info_getter = ERC20InfoReader(w3)
 log_call_parser = BPoolLogCallParser(erc20_info_getter)
 receipt_getter = TransactionReceiptGetter(w3, args.pool_address)
 ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
-
-
-@dataclass_json
-@dataclass
-class Action:
-    timestamp: datetime = field(
-        metadata=config(
-            encoder=datetime.isoformat,
-            decoder=datetime.fromisoformat,
-            mm_field=fields.DateTime(format="iso")
-        )
-    )
-    tx_hash: str
-    block_number: str
-    swap_fee: str
-    denorms: dict
-    action_type: str
-    action: dict
 
 
 def query(client, sql: str) -> pd.DataFrame:
