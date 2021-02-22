@@ -14,7 +14,10 @@
 				"bound": true
 			}
 		},
-		"generated_fees": 0.0,
+		"generated_fees": {
+			"DAI": "0.0",
+			"WETH": "0.0"
+		},
 		"pool_shares": "100",
 		"swap_fee": "0.0025"
 	},

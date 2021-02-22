@@ -55,10 +55,10 @@ class ActionDecoder:
 def p_swap_exact_amount_in(params, step, history, current_state, action):
     pool = current_state['pool']
     # Parse action params
-    token_symbol_in = action['token_in']['symbol']
+    token_in_symbol = action['token_in']['symbol']
     token_amount_in = Decimal(action['token_in']['amount'])
     token_out = action['token_out']['symbol']
-    pool_token_in = pool['tokens'][token_symbol_in]
+    pool_token_in = pool['tokens'][token_in_symbol]
     swap_fee = pool['swap_fee']
 
     if not pool_token_in.bound:
@@ -70,7 +70,7 @@ def p_swap_exact_amount_in(params, step, history, current_state, action):
     if token_amount_in > Decimal(pool_token_in.balance) * MAX_IN_RATIO:
         raise Exception("ERR_MAX_IN_RATIO")
 
-    token_amount_out = BalancerMath.calc_out_given_in(
+    swap_result = BalancerMath.calc_out_given_in(
         token_balance_in=pool_token_in.balance,
         token_weight_in=Decimal(str(pool_token_in.denorm_weight)),
         token_balance_out=out_record.balance,
@@ -78,9 +78,13 @@ def p_swap_exact_amount_in(params, step, history, current_state, action):
         token_amount_in=token_amount_in,
         swap_fee=Decimal(swap_fee)
     )
+
+    generated_fees = pool['generated_fees']
+    generated_fees[token_in_symbol] = Decimal(generated_fees[token_in_symbol]) + swap_result.fee
+
     pool_in_balance = pool_token_in.balance + token_amount_in
     pool_token_in.balance = pool_in_balance
-    pool_out_balance = out_record.balance - token_amount_out
+    pool_out_balance = out_record.balance - swap_result.result
     out_record.balance = pool_out_balance
 
     return pool
@@ -104,7 +108,6 @@ def p_join_pool(params, step, history, current_state, action):
     for token in tokens_in:
         amount_expected = token['amount']
         symbol = token['symbol']
-        print(pool['tokens'][symbol].balance)
         amount = ratio * pool['tokens'][symbol].balance
         if amount != amount_expected:
             print("WARNING: calculated that user should get {} {} but input specified that he should get {} {} instead".format(amount, symbol,
@@ -128,7 +131,7 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, action):
 
     total_weight = calculate_total_denorm_weight(pool)
 
-    pool_amount_out = BalancerMath.calc_pool_out_given_single_in(
+    join_swap = BalancerMath.calc_pool_out_given_single_in(
         token_balance_in=Decimal(pool['tokens'][tokens_in_symbol].balance),
         token_weight_in=Decimal(pool['tokens'][tokens_in_symbol].denorm_weight),
         pool_supply=Decimal(pool['pool_shares']),
@@ -136,6 +139,10 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, action):
         token_amount_in=Decimal(token_in_amount),
         swap_fee=Decimal(swap_fee)
     )
+    generated_fees = pool['generated_fees']
+    generated_fees[tokens_in_symbol] = Decimal(generated_fees[tokens_in_symbol]) + join_swap.fee
+
+    pool_amount_out = join_swap.result
     if pool_amount_out != pool_amount_out_expected:
         print(
             "WARNING: calculated that user should get {} pool shares but input specified that he should get {} pool shares instead.".format(
@@ -153,25 +160,29 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, action):
     """
     pool = current_state['pool']
     swap_fee = pool['swap_fee']
-    token_symbol_out = action['token_out']['symbol']
+    token_out_symbol = action['token_out']['symbol']
     # Check that all tokens_out are bound
-    if not pool['tokens'][token_symbol_out].bound:
+    if not pool['tokens'][token_out_symbol].bound:
         raise Exception("ERR_NOT_BOUND")
     # Check that user is not trying to withdraw too many tokens
     token_amount_out = Decimal(action['token_out']['amount'])
-    if token_amount_out > Decimal(pool['tokens'][token_symbol_out].balance) * MAX_OUT_RATIO:
+    if token_amount_out > Decimal(pool['tokens'][token_out_symbol].balance) * MAX_OUT_RATIO:
         raise Exception("ERR_MAX_OUT_RATIO")
 
     total_weight = calculate_total_denorm_weight(pool)
 
-    pool_amount_in = BalancerMath.calc_pool_in_given_single_out(
-        token_balance_out=Decimal(pool['tokens'][token_symbol_out].balance),
-        token_weight_out=Decimal(pool['tokens'][token_symbol_out].denorm_weight),
+    exit_swap = BalancerMath.calc_pool_in_given_single_out(
+        token_balance_out=Decimal(pool['tokens'][token_out_symbol].balance),
+        token_weight_out=Decimal(pool['tokens'][token_out_symbol].denorm_weight),
         pool_supply=Decimal(pool['pool_shares']),
         total_weight=Decimal(total_weight),
         token_amount_out=token_amount_out,
         swap_fee=Decimal(swap_fee)
     )
+    pool_amount_in = exit_swap.result
+    
+    generated_fees = pool['generated_fees']
+    generated_fees[token_out_symbol] = Decimal(generated_fees[token_out_symbol]) + exit_swap.fee
 
     if pool_amount_in == 0:
         raise Exception("ERR_MATH_APPROX")
@@ -181,7 +192,7 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, action):
                 pool_amount_in, action["pool_amount_in"]))
 
     # Decrease token_symbol (give it to user)
-    pool['tokens'][token_symbol_out].balance -= token_amount_out
+    pool['tokens'][token_out_symbol].balance -= token_amount_out
     # Burn the user's incoming pool shares - exit fee
     exit_fee = pool_amount_in * EXIT_FEE
     pool['pool_shares'] = Decimal(pool['pool_shares']) - pool_amount_in - exit_fee

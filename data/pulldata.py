@@ -114,6 +114,12 @@ def get_initial_token_distribution(new_results) -> dict:
         token['weight'] = str(denorm / total_denorm_weight)
     return tokens
 
+def get_initial_fees_generated(pool_tokens):
+    fees = {}
+    for token_symbol in pool_tokens:
+        fees[token_symbol] = '0.0'
+    return fees
+
 def get_initial_pool_share(transfer_results, tx_hash):
     initial_tx_transfers = transfer_results.loc[transfer_results['transaction_hash'] == tx_hash]
     minting = initial_tx_transfers.loc[initial_tx_transfers['src'] == '0x0000000000000000000000000000000000000000']
@@ -268,6 +274,7 @@ def stage1_load_sql_data(pool_address: str):
 
 def stage2_produce_initial_state(new_results, fees_results, transfer_results) -> typing.Dict:
     tokens = get_initial_token_distribution(new_results)
+    generated_fees = get_initial_fees_generated(tokens)
     swap_fee_weis = int(fees_results.iloc[0]['swapFee'])
     swap_fee = Web3.fromWei(swap_fee_weis, 'ether')
     pool_shares = get_initial_pool_share(transfer_results, new_results.iloc[0]['transaction_hash'])
@@ -275,7 +282,7 @@ def stage2_produce_initial_state(new_results, fees_results, transfer_results) ->
     initial_states = {
         'pool': {
             'tokens': tokens,
-            'generated_fees': 0.0,
+            'generated_fees': generated_fees,
             'pool_shares': str(pool_shares),
             'swap_fee': str(swap_fee)
         },

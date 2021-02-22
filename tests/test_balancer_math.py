@@ -49,8 +49,8 @@ class TestBalancerMath(unittest.TestCase):
                                                           token_balance_in=params['tb_i'], token_weight_out=params['tw_o'],
                                                           token_balance_out=params['tb_o'],
                                                           swap_fee=params['fee'])
-
-        self.assertAlmostEqual(token_amount_out, params['ta_o'], 3)
+        self.assertAlmostEqual(token_amount_out.fee, Decimal('0'), 3)
+        self.assertAlmostEqual(token_amount_out.result, params['ta_o'], 3)
 
     def test_calc_out_given_in_fee(self):
         params = {
@@ -66,8 +66,8 @@ class TestBalancerMath(unittest.TestCase):
                                                           token_balance_in=params['tb_i'], token_weight_out=params['tw_o'],
                                                           token_balance_out=params['tb_o'],
                                                           swap_fee=params['fee'])
-
-        self.assertAlmostEqual(token_amount_out, params['ta_o'], 7)
+        self.assertAlmostEqual(token_amount_out.fee, Decimal('0.1'))
+        self.assertAlmostEqual(token_amount_out.result, params['ta_o'], 7)
 
     def test_calc_in_given_out(self):
         params = {
@@ -84,7 +84,8 @@ class TestBalancerMath(unittest.TestCase):
                                                          token_balance_out=params['tb_o'],
                                                          swap_fee=params['fee'])
 
-        self.assertAlmostEqual(token_amount_in, params['ta_i'], 7)
+        self.assertAlmostEqual(token_amount_in.fee, Decimal('0.0340112801426272840754356244'), 7)
+        self.assertAlmostEqual(token_amount_in.result, params['ta_i'], 7)
 
     def test_calc_pool_out_given_single_in(self):
         params = {
@@ -102,8 +103,8 @@ class TestBalancerMath(unittest.TestCase):
                                                                      total_weight=params['t_w'],
                                                                      token_amount_in=params['ta_i'],
                                                                      swap_fee=params['fee'])
-
-        self.assertAlmostEqual(pool_amount_out, params['pa_o'], 7)
+        self.assertAlmostEqual(pool_amount_out.fee, Decimal('0.001'), 7)
+        self.assertAlmostEqual(pool_amount_out.result, params['pa_o'], 7)
 
     def test_calc_single_in_given_pool_out(self):
         params = {
@@ -121,8 +122,8 @@ class TestBalancerMath(unittest.TestCase):
                                                                      total_weight=params['t_w'],
                                                                      pool_amount_out=params['pa_o'],
                                                                      swap_fee=params['fee'])
-
-        self.assertAlmostEqual(token_amount_in, params['ta_i'], 5)
+        self.assertAlmostEqual(token_amount_in.fee, Decimal('5.26211063623975586820477'), 7)
+        self.assertAlmostEqual(token_amount_in.result, params['ta_i'], 5)
 
     def test_calc_single_out_given_pool_in(self):
         params = {
@@ -141,7 +142,8 @@ class TestBalancerMath(unittest.TestCase):
                                                                       pool_amount_in=params['pa_i'],
                                                                       swap_fee=params['fee'])
 
-        self.assertAlmostEqual(token_amount_out, params['ta_o'], 6)
+        self.assertAlmostEqual(token_amount_out.fee, Decimal('5.20335461122343328240886'), 7)
+        self.assertAlmostEqual(token_amount_out.result, params['ta_o'], 6)
 
     def test_calc_pool_in_given_single_out(self):
         params = {
@@ -159,8 +161,8 @@ class TestBalancerMath(unittest.TestCase):
                                                                     total_weight=params['t_w'],
                                                                     token_amount_out=params['ta_o'],
                                                                     swap_fee=params['fee'])
-
-        self.assertAlmostEqual(pool_amount_in, params['pa_i'], 7)
+        self.assertAlmostEqual(pool_amount_in.fee, Decimal('0.001'), 4)
+        self.assertAlmostEqual(pool_amount_in.result, params['pa_i'], 7)
 
 
 if __name__ == '__main__':

@@ -1,7 +1,17 @@
 from decimal import Decimal
 
+from attr import dataclass
+
 from . import balancer_constants
 from .balancer_constants import BONE
+
+
+@dataclass
+class BalancerMathResult:
+    # The relevant result of the operation
+    result: Decimal
+    # Amount of tokens the pool keeps in the token going into the pool (for join and joinswaps) or out the pool (exits)
+    fee: Decimal
 
 
 class BalancerMath:
@@ -45,14 +55,14 @@ class BalancerMath:
             token_weight_in: Decimal,
             token_balance_out: Decimal,
             token_weight_out: Decimal,
-            swap_fee: Decimal):
+            swap_fee: Decimal) -> BalancerMathResult:
         weight_ratio = token_weight_in / token_weight_out
         adjusted_in = token_amount_in * (1 - swap_fee)
         y = token_balance_in / (token_balance_in + adjusted_in)
         foo = pow(y, weight_ratio)
         bar = 1 - foo
         token_amount_out = token_balance_out * bar
-        return token_amount_out
+        return BalancerMathResult(token_amount_out, token_amount_in - adjusted_in)
 
     # **********************************************************************************************
     # calcInGivenOut                                                                            //
@@ -78,9 +88,11 @@ class BalancerMath:
         y = token_balance_out / diff
         foo = pow(y, weight_ratio)
         foo = foo - 1
-        token_amount_in = 1 - swap_fee
-        token_amount_in = (token_balance_in * foo) / token_amount_in
-        return token_amount_in
+        fee_adjustment = 1 - swap_fee
+        token_amount_in_no_fee = (token_balance_in * foo)
+        token_amount_in = token_amount_in_no_fee / fee_adjustment
+
+        return BalancerMathResult(token_amount_in, token_amount_in - token_amount_in_no_fee)
 
     # **********************************************************************************************
     # calcPoolOutGivenSingleIn                                                                  //
@@ -115,7 +127,7 @@ class BalancerMath:
         pool_ratio = pow(token_in_ratio, normalized_weight)
         new_pool_supply = pool_ratio * pool_supply
         pool_amount_out = new_pool_supply - pool_supply
-        return pool_amount_out
+        return BalancerMathResult(pool_amount_out, token_amount_in - token_amount_in_after_fee)
 
     # **********************************************************************************************
     # calcSingleInGivenPoolOut                                                                  //
@@ -148,7 +160,7 @@ class BalancerMath:
         # tAi = tAiAfterFee / (1 - (1-weightTi) * swap_fee)
         zar = ((1 - normalized_weight) * swap_fee)
         token_amount_in = token_amount_in_after_fee / (1 - zar)
-        return token_amount_in
+        return BalancerMathResult(token_amount_in, token_amount_in - token_amount_in_after_fee)
 
     # **********************************************************************************************
     # calcSingleOutGivenPoolIn                                                                  #
@@ -186,7 +198,7 @@ class BalancerMath:
         # tAo = tAoBeforeswap_fee * (1 - (1-weightTo) * swap_fee)
         zaz = (balancer_constants.BONE - normalized_weight) * swap_fee
         token_amount_out = token_amount_out_before_swap_fee * (balancer_constants.BONE - zaz)
-        return token_amount_out
+        return BalancerMathResult(token_amount_out, token_amount_out_before_swap_fee - token_amount_out)
 
     # **********************************************************************************************
     # calcPoolInGivenSingleOut                                                                  //
@@ -226,4 +238,4 @@ class BalancerMath:
         # charge exit fee on the pool token side
         # pAi = pAiAfterExitFee/(1-exitFee)
         pool_amount_in = pool_amount_in_after_exit_fee / (balancer_constants.BONE - balancer_constants.EXIT_FEE)
-        return pool_amount_in
+        return BalancerMathResult(pool_amount_in, token_amount_out_before_swap_fee - token_amount_out)
