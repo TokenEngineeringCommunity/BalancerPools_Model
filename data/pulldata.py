@@ -25,7 +25,6 @@ parser = argparse.ArgumentParser(prog="pulldata",
 parser.add_argument("pool_address")
 parser.add_argument("--fiat", "-f")
 args = parser.parse_args()
-import ipdb; ipdb.set_trace()
 w3 = Web3(Web3.HTTPProvider(os.environ['NODE_URL']))
 erc20_info_getter = ERC20InfoReader(w3)
 log_call_parser = BPoolLogCallParser(erc20_info_getter)
