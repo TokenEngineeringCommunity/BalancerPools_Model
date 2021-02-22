@@ -64,6 +64,9 @@ def post_processing(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.assign(**unpacked_column_pool).assign(**unpacked_column_token_prices).assign(**unpacked_column_spot_prices)
 
+    # Convert change_datetime from str to datetime
+    df["change_datetime"] = pd.to_datetime(df["change_datetime"], utc=True)
+
     # Calculate token_{x}_value columns
     token_x_value = calc_token_x_value(df)
     df = df.assign(**token_x_value)
