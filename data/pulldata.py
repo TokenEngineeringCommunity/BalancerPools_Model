@@ -1,3 +1,4 @@
+import ipdb
 import glob
 import typing
 import argparse
@@ -63,12 +64,12 @@ def load_json(path):
     with open(path, 'r') as f:
         return json.load(f)
 
-def save_json(x, path, indent=True):
+def save_json(x, path, indent=True, **kwargs):
     with open(path, 'w') as f:
         if indent:
-            json.dump(x, f, indent='\t')
+            json.dump(x, f, indent='\t', **kwargs)
         else:
-            json.dump(x, f)
+            json.dump(x, f, **kwargs)
     print("Saved to", path)
 
 def load_pickle(path):
@@ -162,35 +163,35 @@ def map_token_amounts(txs: [], address_key: str, amount_key: str):
 
 def classify_actions(group):
     action = {}
-    transfers = list(filter(lambda x: x['action_type'] == 'transfer', group))
+    transfers = list(filter(lambda x: x.action_type == 'transfer', group))
     if len(transfers) > 0:
-        key, value = classify_pool_share_transfers(transfers[0]['action'])
+        key, value = classify_pool_share_transfers(transfers[0].action)
         action[key] = value
-    joins = list(filter(lambda x: x['action_type'] == 'join', group))
+    joins = list(filter(lambda x: x.action_type == 'join', group))
     if len(joins) > 0:
         action['type'] = 'join'
-        value = map_token_amounts(joins[0]['action'], address_key='tokenIn', amount_key='tokenAmountIn')
+        value = map_token_amounts(joins[0].action, address_key='tokenIn', amount_key='tokenAmountIn')
         if len(value) == 1:
             action['token_in'] = value[0]
         else:
             action['tokens_in'] = value
-    exits = list(filter(lambda x: x['action_type'] == 'exit', group))
+    exits = list(filter(lambda x: x.action_type == 'exit', group))
     if len(exits) > 0:
         action['type'] = 'exit'
-        value = map_token_amounts(exits[0]['action'], address_key='tokenOut', amount_key='tokenAmountOut')
+        value = map_token_amounts(exits[0].action, address_key='tokenOut', amount_key='tokenAmountOut')
         if len(value) == 1:
             action['token_out'] = value[0]
         else:
             action['tokens_out'] = value
-    swaps = list(filter(lambda x: x['action_type'] == 'swap', group))
+    swaps = list(filter(lambda x: x.action_type == 'swap', group))
     if len(swaps) > 0:
         action['type'] = 'swap'
-        in_value = map_token_amounts(swaps[0]['action'], address_key='tokenIn', amount_key='tokenAmountIn')
+        in_value = map_token_amounts(swaps[0].action, address_key='tokenIn', amount_key='tokenAmountIn')
         if len(in_value) == 1:
             action['token_in'] = in_value[0]
         else:
             action['tokens_in'] = in_value
-        out_value = map_token_amounts(swaps[0]['action'], address_key='tokenOut', amount_key='tokenAmountOut')
+        out_value = map_token_amounts(swaps[0].action, address_key='tokenOut', amount_key='tokenAmountOut')
         if len(out_value) == 1:
             action['token_out'] = out_value[0]
         else:
@@ -302,11 +303,11 @@ def stage3_merge_actions(pool_address, grouped_actions):
     actions_final = []
     for group in grouped_actions:
         merged_action = {
-            "timestamp": group[0]['timestamp'],
-            "tx_hash": group[0]['tx_hash'],
-            "block_number": group[0]['block_number'],
-            "swap_fee": str(Web3.fromWei(int(group[0]['swap_fee']), 'ether')),
-            "denorms": group[0]['denorms']
+            "timestamp": group[0].timestamp,
+            "tx_hash": group[0].tx_hash,
+            "block_number": group[0].block_number,
+            "swap_fee": str(Web3.fromWei(int(group[0].swap_fee), 'ether')),
+            "denorms": group[0].denorms
         }
         r = tx_receipts.get(merged_action['tx_hash'])
         if not r:
@@ -324,7 +325,6 @@ def stage3_merge_actions(pool_address, grouped_actions):
 
     print("Backing up tx receipts to", filename)
     save_json(tx_receipts, filename, indent=False)
-
     actions_final.sort(key=lambda a: a['timestamp'])
     return actions_final
 
@@ -387,10 +387,8 @@ def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol
     def add_price_feeds_to_actions(actions: typing.List[typing.Dict]) -> typing.List[typing.Dict]:
         actions.extend(price_actions)
         def equalize_date_types(action):
-            if isinstance(action['timestamp'], str):
+            if not isinstance(action['timestamp'], datetime):
                 action['timestamp'] = dateutil.parser.isoparse(action['timestamp'])
-            else:
-                action['timestamp'] = action['timestamp'].to_pydatetime()
             return action
         actions = list(map(equalize_date_types, actions))
         actions.sort(key=lambda x: x['timestamp'])
@@ -455,17 +453,20 @@ def produce_actions():
         tx_hash = actions[i].tx_hash
         if grouped_by_tx_actions.get(tx_hash) is None:
             grouped_by_tx_actions[tx_hash] = []
-        grouped_by_tx_actions[tx_hash].append(action.to_dict())
+        grouped_by_tx_actions[tx_hash].append(action)
     grouped_actions = list(map(lambda key: grouped_by_tx_actions[key], grouped_by_tx_actions))
 
     # Filter out pool share transfer
-    grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0]['action_type'] == 'transfer'), grouped_actions))
+    grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0].action_type == 'transfer'), grouped_actions))
 
     # save_pickle(grouped_actions, "{}/grouped_actions.pickle".format(args.pool_address))
     # grouped_actions = load_pickle("{}/grouped_actions.pickle".format(args.pool_address))
 
     actions_final = stage3_merge_actions(args.pool_address, grouped_actions)
-    save_json(actions_final, f"{args.pool_address}-actions.json")
+    def prep_json_serialize(o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+    save_json(actions_final, f"{args.pool_address}-actions.json", default=prep_json_serialize)
 
     # save_pickle(actions_final, f"{args.pool_address}/actions_final.pickle")
     # actions_final = load_pickle(f"{args.pool_address}/actions_final.pickle")
