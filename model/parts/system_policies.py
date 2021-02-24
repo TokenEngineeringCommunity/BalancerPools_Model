@@ -68,10 +68,15 @@ class ActionDecoder:
     def p_contract_call_action_decoder(idx, params, step, history, current_state):
         action = ActionDecoder.action_df['action'][idx]
         timestamp = ActionDecoder.action_df['timestamp'][idx]
-        contract_call = ActionDecoder.action_df['contract_call'][idx]
+        tx = ActionDecoder.action_df['tx_hash'][idx]
+        contract_call = None
+        if action['type'] != 'external_price_update':
+            contract_call = ActionDecoder.action_df['contract_call'][idx][0]
+        else:
+            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type']}
         if contract_call['type'] == 'joinswapExternAmountIn':
             input_params, output_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_contract_call(action, contract_call)
-            answer = p_swap_exact_amount_in(params, step, history, current_state, input_params, output_params)
+            answer = p_join_swap_extern_amount_in(params, step, history, current_state, input_params, output_params)
         elif contract_call['type'] == 'joinPool':
             input_params, output_params = PoolMethodParamsDecoder.join_pool_contract_call(action, contract_call)
             answer = p_join_pool(params, step, history, current_state, input_params, output_params)
@@ -90,14 +95,12 @@ class ActionDecoder:
         elif contract_call['type'] == 'exitswapExternAmountOut':
             input_params, output_params = PoolMethodParamsDecoder.exit_swap_extern_amount_out_contract_call(action, contract_call)
             answer = p_exit_swap_extern_amount_out(params, step, history, current_state, input_params, output_params)
-        elif action['type'] == 'external_price_update':
-            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type']}
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
         return {'pool_update': answer, 'change_datetime_update': timestamp, 'action_type': action['type']}
 
     @staticmethod
-    def p_simplified_action_decoder(idx, params, step, history, current_state):
+    def p_plot_output_action_decoder(idx, params, step, history, current_state):
         action = ActionDecoder.action_df['action'][idx]
         timestamp = ActionDecoder.action_df['timestamp'][idx]
         if action['type'] == 'swap':
@@ -136,8 +139,7 @@ class ActionDecoder:
         elif ActionDecoder.decoding_type == ActionDecodingType.contract_call:
             return ActionDecoder.p_contract_call_action_decoder(idx, params, step, history, current_state)
         elif ActionDecoder.decoding_type == ActionDecodingType.replay_output:
-            # RODO
-            pass
+            return ActionDecoder.p_plot_output_action_decoder(idx, params, step, history, current_state)
         else:
             raise Exception(f'unknwon decoding type {decoding_type}')
 
@@ -148,7 +150,7 @@ def p_swap_exact_amount_in(params, step, history, current_state, input_params: S
     # Parse action params
     token_in_symbol = input_params.token_in.symbol
     token_amount_in = input_params.token_in.amount
-    token_out = input_params.min_token_out
+    token_out = input_params.min_token_out.symbol
     pool_token_in = pool['tokens'][token_in_symbol]
     swap_fee = pool['swap_fee']
 
@@ -207,22 +209,21 @@ def p_swap_exact_amount_out(params, step, history, current_state, input_params: 
         raise Exception('ERR_NOT_BOUND')
     if not pool_token_in.bound:
         raise Exception('ERR_NOT_BOUND')
-
-    if token_amount_out > (pool_token_in.balance * MAX_OUT_RATIO):
+    if token_amount_out > (pool_token_out.balance * MAX_OUT_RATIO):
         raise Exception("ERR_MAX_OUT_RATIO")
 
     swap_result = BalancerMath.calc_in_given_out(
-        token_balance_in=pool_token_in.balance,
-        token_weight_in=pool_token_in.denorm,
-        token_balance_out=pool_token_out.balance,
-        token_weight_out=pool_token_out.denorm,
+        token_balance_in=Decimal(pool_token_in.balance),
+        token_weight_in=Decimal(pool_token_in.denorm_weight),
+        token_balance_out=Decimal(pool_token_out.balance),
+        token_weight_out=Decimal(pool_token_out.denorm_weight),
         token_amount_out=token_amount_out,
         swap_fee=Decimal(swap_fee)
     )
     token_amount_in = swap_result.result
-    if token_amount_in.result > input_params.max_token_in.amount:
-        raise Exception('ERR_LIMIT_IN')
-
+    if token_amount_in > input_params.max_token_in.amount:
+        #raise Exception('ERR_LIMIT_IN')
+        print(f"WARNING: token_amount_in {token_amount_in} > max {input_params.max_token_in.amount}")
     generated_fees = pool['generated_fees']
     generated_fees[token_in_symbol] = Decimal(generated_fees[token_in_symbol]) + swap_result.fee
 
@@ -389,8 +390,8 @@ def p_exit_swap_pool_amount_in(params, step, history, current_state, input_param
     total_weight = calculate_total_denorm_weight(pool)
 
     exit_swap = BalancerMath.calc_single_out_given_pool_in(
-        token_balance_out=pool_token_out.balance,
-        token_weight_out=pool_token_out.denorm,
+        token_balance_out=Decimal(pool_token_out.balance),
+        token_weight_out=Decimal(pool_token_out.denorm_weight),
         pool_supply=Decimal(pool['pool_shares']),
         total_weight=Decimal(total_weight),
         pool_amount_in=pool_amount_in,

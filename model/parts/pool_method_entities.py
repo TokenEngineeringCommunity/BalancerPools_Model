@@ -10,7 +10,7 @@ class TokenAmount:
 
     @staticmethod
     def ta_with_dict(token_dict):
-        return TokenAmount(token_dict['symbol'], Decimal(token_dict['amount']))
+        return TokenAmount(symbol=token_dict['symbol'], amount=Decimal(token_dict['amount']))
 
 
 @dataclass
@@ -88,14 +88,14 @@ class PoolMethodParamsDecoder:
     @staticmethod
     def join_pool_simplified(action: dict) -> (JoinParamsInput, JoinParamsOutput):
         tokens_in = action['tokens_in']
-        join_input = JoinParamsInput(action['pool_amount_out'], list(filter(lambda x: x['symbol'], tokens_in)))
+        join_input = JoinParamsInput(Decimal(action['pool_amount_out']), list(filter(lambda x: x['symbol'], tokens_in)))
         join_output = JoinParamsOutput(list(map(lambda x: TokenAmount.ta_with_dict(x), tokens_in)))
         return join_input, join_output
 
     @staticmethod
     def join_pool_contract_call(action: dict, contract_call: dict) -> (JoinParamsInput, JoinParamsOutput):
         tokens_in = action['tokens_in']
-        join_input = JoinParamsInput(contract_call['poolAmountOut'], list(filter(lambda x: x['symbol'], tokens_in)))
+        join_input = JoinParamsInput(Decimal(contract_call['inputs']['poolAmountOut']), list(filter(lambda x: x['symbol'], tokens_in)))
         join_output = JoinParamsOutput(list(map(lambda x: TokenAmount.ta_with_dict(x), tokens_in)))
         return join_input, join_output
 
@@ -107,7 +107,7 @@ class PoolMethodParamsDecoder:
 
     @staticmethod
     def join_swap_extern_amount_in_contract_call(action: dict, contract_call: dict) -> (JoinSwapExternAmountInInput, JoinSwapExternAmountInOutput):
-        join_swap_input = JoinSwapExternAmountInInput(TokenAmount(contract_call['inputs']['tokenIn_symbol'], contract_call['inputs']['tokenAmountIn']))
+        join_swap_input = JoinSwapExternAmountInInput(TokenAmount(symbol=contract_call['inputs']['tokenIn_symbol'], amount=Decimal(contract_call['inputs']['tokenAmountIn'])))
         join_swap_output = JoinSwapExternAmountInOutput(Decimal(action['pool_amount_out']))
         return join_swap_input, join_swap_output
 
@@ -124,8 +124,8 @@ class PoolMethodParamsDecoder:
 
     @staticmethod
     def swap_exact_amount_in_contract_call(action: dict, contract_call: dict) -> (SwapExactAmountInInput, SwapExactAmountInOutput):
-        token_in = TokenAmount(symbol=contract_call['inputs']['tokenIn_symbol'], amount=contract_call['inputs']['tokenAmountIn'])
-        min_token_out = TokenAmount(symbol=contract_call['inputs']['tokenOut_symbol'], amount=contract_call['inputs']['minAmountOut'])
+        token_in = TokenAmount(symbol=contract_call['inputs']['tokenIn_symbol'], amount=Decimal(contract_call['inputs']['tokenAmountIn']))
+        min_token_out = TokenAmount(symbol=contract_call['inputs']['tokenOut_symbol'], amount=Decimal(contract_call['inputs']['minAmountOut']))
         swap_input = SwapExactAmountInInput(token_in=token_in,
                                             min_token_out=min_token_out)
         swap_output = SwapExactAmountInOutput(TokenAmount.ta_with_dict(action['token_out']))
@@ -133,8 +133,8 @@ class PoolMethodParamsDecoder:
     
     @staticmethod
     def swap_exact_amount_out_contract_call(action: dict, contract_call: dict) -> (SwapExactAmountOutInput, SwapExactAmountOutOutput):
-        max_token_in = TokenAmount(symbol=contract_call['inputs']['tokenIn_symbol'], amount=contract_call['inputs']['maxAmountIn'])
-        token_out = TokenAmount(symbol=contract_call['inputs']['tokenOut_symbol'], amount=contract_call['inputs']['tokenAmountOut'])
+        max_token_in = TokenAmount(symbol=contract_call['inputs']['tokenIn_symbol'], amount=Decimal(contract_call['inputs']['maxAmountIn']))
+        token_out = TokenAmount(symbol=contract_call['inputs']['tokenOut_symbol'], amount=Decimal(contract_call['inputs']['tokenAmountOut']))
         swap_input = SwapExactAmountOutInput(max_token_in=max_token_in, token_out=token_out)
         swap_output = SwapExactAmountOutOutput(TokenAmount.ta_with_dict(action['token_in']))
         return swap_input, swap_output
@@ -153,21 +153,21 @@ class PoolMethodParamsDecoder:
 
     @staticmethod
     def exit_swap_pool_amount_in_simplified(action: dict) -> (ExitSwapPoolAmountInInput, ExitSwapPoolAmountInOutput):
-        exit_swap_input = ExitSwapPoolAmountInInput(action['inputs']['pool_amount_in'])
+        exit_swap_input = ExitSwapPoolAmountInInput(Decimal(action['pool_amount_in']))
         exit_swap_output = ExitSwapPoolAmountInOutput(token_out=TokenAmount.ta_with_dict(action['token_out']))
         return exit_swap_input, exit_swap_output
 
     @staticmethod
     def exit_swap_pool_amount_in_contract_call(action: dict, contract_call: dict) -> (ExitSwapPoolAmountInInput, ExitSwapPoolAmountInOutput):
-        exit_swap_input = ExitSwapPoolAmountInInput(contract_call['inputs']['poolAmountIn'])
+        exit_swap_input = ExitSwapPoolAmountInInput(Decimal(contract_call['inputs']['poolAmountIn']))
         exit_swap_output = ExitSwapPoolAmountInOutput(token_out=TokenAmount.ta_with_dict(action['token_out']))
         return exit_swap_input, exit_swap_output
 
     @staticmethod
     def exit_swap_extern_amount_out_contract_call(action: dict, contract_call: dict) -> (ExitSwapPoolExternAmountOutInput, ExitSwapPoolExternAmountOutOutput):
-        token_out = TokenAmount(symbol=contract_call['inputs']['tokenOut_symbol'], amount=contract_call['inputs']['tokenAmountOut'])
+        token_out = TokenAmount(symbol=contract_call['inputs']['tokenOut_symbol'], amount=Decimal(contract_call['inputs']['tokenAmountOut']))
         exit_swap_input = ExitSwapPoolExternAmountOutInput(token_out=token_out, max_pool_in=Decimal(contract_call['inputs']['maxPoolAmountIn']))
-        exit_swap_output = ExitSwapPoolExternAmountOutOutput(action['pool_amount_in'])
+        exit_swap_output = ExitSwapPoolExternAmountOutOutput(Decimal(action['pool_amount_in']))
         return exit_swap_input, exit_swap_output
 
 
