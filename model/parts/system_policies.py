@@ -9,6 +9,15 @@ from model.parts.balancer_math import BalancerMath
 import pandas as pd
 
 
+def update_fee(token_symbol: str, fee: Decimal, pool: dict):
+    generated_fees = pool['generated_fees']
+    for token in generated_fees:
+        if token == token_symbol:
+            generated_fees[token] = fee
+        else:
+            generated_fees[token] = Decimal('0')
+
+
 def calculate_total_denorm_weight(pool) -> Decimal:
     total_weight = Decimal('0')
     for token_symbol in pool['tokens']:
@@ -46,7 +55,8 @@ class ActionDecoder:
         elif action['type'] == 'exit':
             answer = p_exit_pool(params, step, history, current_state, action)
         elif action['type'] == 'external_price_update':
-            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type']}
+            update_fee(token_symbol='', fee=Decimal('0'), pool=current_state['pool'])
+            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'], 'pool_update': current_state['pool']}
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
         return {'pool_update': answer, 'change_datetime_update': timestamp, 'action_type': action['type']}
@@ -79,8 +89,7 @@ def p_swap_exact_amount_in(params, step, history, current_state, action):
         swap_fee=Decimal(swap_fee)
     )
 
-    generated_fees = pool['generated_fees']
-    generated_fees[token_in_symbol] = Decimal(generated_fees[token_in_symbol]) + swap_result.fee
+    update_fee(token_in_symbol, swap_result.fee, pool)
 
     pool_in_balance = pool_token_in.balance + token_amount_in
     pool_token_in.balance = pool_in_balance
@@ -139,8 +148,8 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, action):
         token_amount_in=Decimal(token_in_amount),
         swap_fee=Decimal(swap_fee)
     )
-    generated_fees = pool['generated_fees']
-    generated_fees[tokens_in_symbol] = Decimal(generated_fees[tokens_in_symbol]) + join_swap.fee
+
+    update_fee(tokens_in_symbol, join_swap.fee, pool)
 
     pool_amount_out = join_swap.result
     if pool_amount_out != pool_amount_out_expected:
@@ -180,9 +189,8 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, action):
         swap_fee=Decimal(swap_fee)
     )
     pool_amount_in = exit_swap.result
-    
-    generated_fees = pool['generated_fees']
-    generated_fees[token_out_symbol] = Decimal(generated_fees[token_out_symbol]) + exit_swap.fee
+
+    update_fee(token_out_symbol, exit_swap.fee, pool)
 
     if pool_amount_in == 0:
         raise Exception("ERR_MATH_APPROX")
