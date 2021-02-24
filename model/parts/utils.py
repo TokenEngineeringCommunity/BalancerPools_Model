@@ -102,4 +102,7 @@ def post_processing(df: pd.DataFrame, include_spot_prices=False) -> pd.DataFrame
     column_total_token_balances = df[token_balance_columns].sum(axis=1)
     df = df.assign(total_token_balances=column_total_token_balances)
 
+    # Convert generated_fees_(token) columns from str or Decimal to float64
+    generated_fees_columns = [f'generated_fees_{s}' for s in symbols]
+    for generated_fee_col in generated_fees_columns: df[generated_fee_col] = df[generated_fee_col].astype('float64')
     return df
