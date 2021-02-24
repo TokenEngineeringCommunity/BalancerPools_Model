@@ -59,9 +59,11 @@ def query(client, sql: str) -> pd.DataFrame:
     )
     return result
 
+
 def load_json(path):
     with open(path, 'r') as f:
         return json.load(f)
+
 
 def save_json(x, path, indent=True):
     with open(path, 'w') as f:
@@ -71,24 +73,29 @@ def save_json(x, path, indent=True):
             json.dump(x, f)
     print("Saved to", path)
 
+
 def load_pickle(path):
     print("Unpickling from", path)
     with open(path, 'rb') as f:
         return pickle.load(f)
+
 
 def save_pickle(x, path):
     print("Pickling to", path)
     with open(path, 'wb') as f:
         return pickle.dump(x, f)
 
+
 def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
     filename = f"{pool_address}/{event_type}.pickle"
     save_pickle(df, filename)
+
 
 def query_and_save(client, pool_address: str, event_type: str, sql: str, writer) -> pd.DataFrame:
     df = query(client, sql)
     writer(pool_address, event_type, df)
     return df
+
 
 def get_initial_token_distribution(new_results) -> dict:
     receipt = w3.eth.getTransactionReceipt(new_results.iloc[0]['transaction_hash'])
@@ -114,17 +121,20 @@ def get_initial_token_distribution(new_results) -> dict:
         token['weight'] = str(denorm / total_denorm_weight)
     return tokens
 
+
 def get_initial_fees_generated(pool_tokens):
     fees = {}
     for token_symbol in pool_tokens:
         fees[token_symbol] = '0.0'
     return fees
 
+
 def get_initial_pool_share(transfer_results, tx_hash):
     initial_tx_transfers = transfer_results.loc[transfer_results['transaction_hash'] == tx_hash]
     minting = initial_tx_transfers.loc[initial_tx_transfers['src'] == '0x0000000000000000000000000000000000000000']
     wei_amount = int(minting.iloc[0]['amt'])
     return Web3.fromWei(wei_amount, 'ether')
+
 
 def format_denorms(denorms: dict) -> typing.List[typing.Dict]:
     """
@@ -141,6 +151,7 @@ def format_denorms(denorms: dict) -> typing.List[typing.Dict]:
         d.append(a)
     return d
 
+
 def classify_pool_share_transfers(transfers: []) -> (str, str):
     pool_share_burnt = list(filter(lambda x: x['dst'] == ZERO_ADDRESS, transfers))
     if len(pool_share_burnt) > 0:
@@ -149,6 +160,7 @@ def classify_pool_share_transfers(transfers: []) -> (str, str):
     if len(pool_share_minted) > 0:
         return 'pool_amount_out', str(Web3.fromWei(int(pool_share_minted[0]['amt']), 'ether'))
     raise Exception('not pool share mint or burn', transfers)
+
 
 def map_token_amounts(txs: [], address_key: str, amount_key: str):
     def map_tx(x):
@@ -159,6 +171,7 @@ def map_token_amounts(txs: [], address_key: str, amount_key: str):
         return mapped
 
     return list(map(map_tx, txs))
+
 
 def classify_actions(group):
     action = {}
@@ -203,6 +216,7 @@ def classify_actions(group):
         action['type'] = 'exit_swap'
     return action
 
+
 def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFrame) -> typing.List[Action]:
     actions = []
     grouped = events_list.groupby("transaction_hash")
@@ -220,10 +234,11 @@ def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFra
         # convert block_number and swap_fee to string to painlessly
         # convert to JSON later (numpy.int64 can't be JSON serialized)
         a = Action(timestamp=ts.to_pydatetime(), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
-                    denorms=denorm, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
+                   denorms=denorm, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
         actions.append(a)
 
     return actions
+
 
 def stage1_load_sql_data(pool_address: str):
     try:
@@ -272,6 +287,7 @@ def stage1_load_sql_data(pool_address: str):
 
     return new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results
 
+
 def stage2_produce_initial_state(new_results, fees_results, transfer_results) -> typing.Dict:
     tokens = get_initial_token_distribution(new_results)
     generated_fees = get_initial_fees_generated(tokens)
@@ -290,6 +306,7 @@ def stage2_produce_initial_state(new_results, fees_results, transfer_results) ->
         'change_datetime': creation_date
     }
     return initial_states
+
 
 def stage3_merge_actions(pool_address, grouped_actions):
     filename = f"{pool_address}/txhash_contractcalls.json"
@@ -327,6 +344,7 @@ def stage3_merge_actions(pool_address, grouped_actions):
 
     actions_final.sort(key=lambda a: a['timestamp'])
     return actions_final
+
 
 def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol: str, initial_state: typing.Dict, actions: typing.List[typing.Dict]):
     def parse_price_feeds(token_symbols: []) -> []:
@@ -386,18 +404,21 @@ def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol
 
     def add_price_feeds_to_actions(actions: typing.List[typing.Dict]) -> typing.List[typing.Dict]:
         actions.extend(price_actions)
+
         def equalize_date_types(action):
             if isinstance(action['timestamp'], str):
                 action['timestamp'] = dateutil.parser.isoparse(action['timestamp'])
             else:
                 action['timestamp'] = action['timestamp'].to_pydatetime()
             return action
+
         actions = list(map(equalize_date_types, actions))
         actions.sort(key=lambda x: x['timestamp'])
 
         def convert_to_iso_str(action):
             action['timestamp'] = action['timestamp'].isoformat()
             return action
+
         actions = list(map(convert_to_iso_str, actions))
 
         # Remove prices before pool creation. First action must be pool creation
@@ -471,11 +492,13 @@ def produce_actions():
     # actions_final = load_pickle(f"{args.pool_address}/actions_final.pickle")
 
     if args.fiat:
-        initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, args.fiat, initial_state, actions_final)
+        initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, args.fiat, initial_state,
+                                                                                                 actions_final)
         save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json')
         save_json(actions_w_prices, f'{args.pool_address}-actions-prices.json')
     else:
         print("Fiat base for token prices not given - skipping price data injection")
+
 
 from ipdb import launch_ipdb_on_exception
 
