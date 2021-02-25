@@ -3,7 +3,6 @@ import json
 import pickle
 
 def load_json(path, **kwargs):
-    print(kwargs.items())
     with open(path, 'r') as f:
         return json.load(f, **kwargs)
 
