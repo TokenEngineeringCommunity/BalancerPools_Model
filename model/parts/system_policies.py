@@ -8,6 +8,7 @@ from model.parts.balancer_math import BalancerMath
 
 import pandas as pd
 
+VERBOSE=False
 
 def update_fee(token_symbol: str, fee: Decimal, pool: dict):
     generated_fees = pool['generated_fees']
@@ -118,7 +119,7 @@ def p_join_pool(params, step, history, current_state, action):
         amount_expected = token['amount']
         symbol = token['symbol']
         amount = ratio * pool['tokens'][symbol].balance
-        if amount != amount_expected:
+        if amount != amount_expected and VERBOSE:
             print("WARNING: calculated that user should get {} {} but input specified that he should get {} {} instead".format(amount, symbol,
                                                                                                                                amount_expected,
                                                                                                                                symbol))
@@ -152,7 +153,7 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, action):
     update_fee(tokens_in_symbol, join_swap.fee, pool)
 
     pool_amount_out = join_swap.result
-    if pool_amount_out != pool_amount_out_expected:
+    if pool_amount_out != pool_amount_out_expected and VERBOSE:
         print(
             "WARNING: calculated that user should get {} pool shares but input specified that he should get {} pool shares instead.".format(
                 pool_amount_out, pool_amount_out_expected))
@@ -194,7 +195,7 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, action):
 
     if pool_amount_in == 0:
         raise Exception("ERR_MATH_APPROX")
-    if pool_amount_in != action["pool_amount_in"]:
+    if pool_amount_in != action["pool_amount_in"] and VERBOSE:
         print(
             "WARNING: calculated that pool should get {} pool shares but input specified that pool should get {} pool shares instead".format(
                 pool_amount_in, action["pool_amount_in"]))
