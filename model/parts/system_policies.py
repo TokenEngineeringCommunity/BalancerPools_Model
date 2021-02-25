@@ -131,9 +131,7 @@ class ActionDecoder:
         '''
         In this simplified model of Balancer, we have not modeled user behavior. Instead, we map events to actions.
         '''
-        print(params)
-        if params.
-        decoding_type = params[0]['decoding_type']
+        decoding_type = params['decoding_type']
         ActionDecoder.decoding_type = ActionDecodingType(decoding_type)
         idx = current_state['timestep'] + 1
         if ActionDecoder.decoding_type == ActionDecodingType.simplified:
