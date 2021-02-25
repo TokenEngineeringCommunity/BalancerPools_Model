@@ -15,7 +15,8 @@ from model.parts.pool_method_entities import JoinParamsInput, JoinParamsOutput, 
     JoinSwapExternAmountInOutput, SwapExactAmountInInput, SwapExactAmountInOutput, SwapExactAmountOutInput, SwapExactAmountOutOutput, ExitPoolInput, \
     ExitPoolOutput, ExitSwapPoolAmountInInput, ExitSwapPoolAmountInOutput, ExitSwapPoolExternAmountOutInput, ExitSwapPoolExternAmountOutOutput
 
-VERBOSE=False
+VERBOSE = False
+
 
 def update_fee(token_symbol: str, fee: Decimal, pool: dict):
     generated_fees = pool['generated_fees']
@@ -24,6 +25,7 @@ def update_fee(token_symbol: str, fee: Decimal, pool: dict):
             generated_fees[token] = fee
         else:
             generated_fees[token] = Decimal('0')
+
 
 def calculate_total_denorm_weight(pool) -> Decimal:
     total_weight = Decimal('0')
@@ -88,12 +90,15 @@ class ActionDecoder:
             return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
                     'pool_update': current_state['pool']}
         if contract_call['type'] == 'joinswapExternAmountIn':
+
             input_params, output_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_contract_call(action, contract_call)
             answer = p_join_swap_extern_amount_in(params, step, history, current_state, input_params, output_params)
         elif contract_call['type'] == 'joinPool':
             input_params, output_params = PoolMethodParamsDecoder.join_pool_contract_call(action, contract_call)
             answer = p_join_pool(params, step, history, current_state, input_params, output_params)
         elif contract_call['type'] == 'swapExactAmountIn':
+            print(current_state['pool'])
+            print(action)
             input_params, output_params = PoolMethodParamsDecoder.swap_exact_amount_in_contract_call(action, contract_call)
             answer = p_swap_exact_amount_in(params, step, history, current_state, input_params, output_params)
         elif contract_call['type'] == 'swapExactAmountOut':
@@ -118,16 +123,16 @@ class ActionDecoder:
         timestamp = ActionDecoder.action_df['timestamp'][idx]
         if action['type'] == 'swap':
             input_params, output_params = PoolMethodParamsDecoder.swap_exact_amount_in_simplified(action)
-            answer = p_swap_exact_amount_in_plot_output(params, step, history, current_state, input_params, output_params)
+            answer = p_swap_plot_output(params, step, history, current_state, input_params, output_params)
         elif action['type'] == 'join':
             input_params, output_params = PoolMethodParamsDecoder.join_pool_simplified(action)
             answer = p_join_pool_plot_output(params, step, history, current_state, input_params, output_params)
         elif action['type'] == 'join_swap':
             input_params, output_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_simplified(action)
-            answer = p_join_swap_extern_amount_in_plot_output(params, step, history, current_state, input_params, output_params)
+            answer = p_join_swap_plot_output(params, step, history, current_state, input_params, output_params)
         elif action['type'] == 'exit_swap':
             input_params, output_params = PoolMethodParamsDecoder.exit_swap_pool_amount_in_simplified(action)
-            answer = p_exit_swap_pool_amount_in_plot_output(params, step, history, current_state, input_params, output_params)
+            answer = p_exit_swap_plot_output(params, step, history, current_state, input_params, output_params)
         elif action['type'] == 'exit':
             input_params, output_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
             answer = p_exit_pool_plot_output(params, step, history, current_state, input_params, output_params)
@@ -144,12 +149,12 @@ class ActionDecoder:
         '''
         In this simplified model of Balancer, we have not modeled user behavior. Instead, we map events to actions.
         '''
-        #When only 1 param this happens
+        # When only 1 param this happens
         if isinstance(params, list):
             # 1 param
             decoding_type = params[0]['decoding_type']
         else:
-            #Parameter sweep
+            # Parameter sweep
             decoding_type = params['decoding_type']
 
         ActionDecoder.decoding_type = ActionDecodingType(decoding_type)
@@ -202,8 +207,8 @@ def p_swap_exact_amount_in(params, step, history, current_state, input_params: S
     return pool
 
 
-def p_swap_exact_amount_in_plot_output(params, step, history, current_state, input_params: SwapExactAmountInInput,
-                                       output_params: SwapExactAmountInOutput) -> dict:
+def p_swap_plot_output(params, step, history, current_state, input_params: SwapExactAmountInInput,
+                       output_params: SwapExactAmountInOutput) -> dict:
     pool = current_state['pool']
     pool_token_in = pool['tokens'][input_params.token_in.symbol]
     pool_token_out = pool['tokens'][output_params.token_out.symbol]
@@ -241,7 +246,7 @@ def p_swap_exact_amount_out(params, step, history, current_state, input_params: 
     )
     token_amount_in = swap_result.result
     if token_amount_in > input_params.max_token_in.amount and VERBOSE:
-        #raise Exception('ERR_LIMIT_IN')
+        # raise Exception('ERR_LIMIT_IN')
         print(f"WARNING: token_amount_in {token_amount_in} > max {input_params.max_token_in.amount}")
 
     update_fee(token_in_symbol, swap_result.fee, pool)
@@ -249,17 +254,6 @@ def p_swap_exact_amount_out(params, step, history, current_state, input_params: 
     pool_token_in.balance = pool_token_in.balance + token_amount_in
     pool_token_out.balance = pool_token_out.balance - token_amount_out
 
-    return pool
-
-
-def p_swap_exact_amount_out_plot_output(params, step, history, current_state, input_params: SwapExactAmountOutInput,
-                                        output_params: SwapExactAmountOutOutput) -> dict:
-    pool = current_state['pool']
-    pool_token_in = pool['tokens'][input_params.max_token_in.symbol]
-    pool_token_out = pool['tokens'][input_params.token_out.symbol]
-
-    pool_token_in.balance = pool_token_in.balance + output_params.token_in.amount
-    pool_token_out.balance = pool_token_out.balance - input_params.token_out.amount
     return pool
 
 
@@ -289,15 +283,6 @@ def p_join_pool(params, step, history, current_state, input_params: JoinParamsIn
         pool['tokens'][symbol].balance += amount
     pool['pool_shares'] += pool_amount_out
 
-    return pool
-
-
-def p_join_pool_plot_output(params, step, history, current_state, input_params: JoinParamsInput, output_params: JoinParamsOutput) -> dict:
-    pool = current_state['pool']
-    pool_amount_out = input_params.pool_amount_out
-    for token in output_params.tokens_in:
-        pool['tokens'][token.symbol].balance += token.amount
-    pool['pool_shares'] += pool_amount_out
     return pool
 
 
@@ -337,17 +322,9 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, input_par
     return pool
 
 
-def p_join_swap_extern_amount_in_plot_output(params, step, history, current_state, input_params: JoinSwapExternAmountInInput,
-                                             output_params: JoinSwapExternAmountInOutput) -> dict:
-    pool = current_state['pool']
-    tokens_in_symbol = input_params.token_in.symbol
-    pool['pool_shares'] = Decimal(pool['pool_shares']) + output_params.pool_amount_out
-    pool['tokens'][tokens_in_symbol].balance += input_params.token_in.amount
-    return pool
-
-
 def p_join_swap_pool_amount_out(params, step, history, current_state, input_params: JoinSwapExternAmountInInput,
                                 output_params: JoinSwapExternAmountInOutput):
+    print('p_join_swap_pool_amount_out')
     pass
 
 
@@ -431,22 +408,6 @@ def p_exit_swap_pool_amount_in(params, step, history, current_state, input_param
     return pool
 
 
-def p_exit_swap_pool_amount_in_plot_output(params, step, history, current_state, input_params, output_params):
-    pool = current_state['pool']
-    pool_token_out = pool['tokens'][output_params.token_out.symbol]
-    if not pool_token_out.bound:
-        raise Exception("ERR_NOT_BOUND")
-    pool_amount_in = input_params.pool_amount_in
-
-    pool['tokens'][output_params.token_out.symbol].balance -= output_params.token_out.amount
-
-    # Burn the user's incoming pool shares - exit fee
-    exit_fee = pool_amount_in * EXIT_FEE
-    pool['pool_shares'] = Decimal(pool['pool_shares']) - pool_amount_in - exit_fee
-
-    return pool
-
-
 def p_exit_pool(params, step, history, current_state, input_params: ExitPoolInput, output_params: ExitPoolOutput) -> dict:
     """
         Exit a pool by withdrawing liquidity for all token_symbol.
@@ -467,6 +428,42 @@ def p_exit_pool(params, step, history, current_state, input_params: ExitPoolInpu
         if token_amount_out == Decimal('0'):
             raise Exception("ERR_MATH_APPROX")
         pool['tokens'][token_symbol].balance -= token_amount_out
+
+    return pool
+
+
+# PLOT OUTPUT
+
+def p_join_pool_plot_output(params, step, history, current_state, input_params: JoinParamsInput, output_params: JoinParamsOutput) -> dict:
+    pool = current_state['pool']
+    pool_amount_out = input_params.pool_amount_out
+    for token in output_params.tokens_in:
+        pool['tokens'][token.symbol].balance += token.amount
+    pool['pool_shares'] += pool_amount_out
+    return pool
+
+
+def p_join_swap_plot_output(params, step, history, current_state, input_params: JoinSwapExternAmountInInput,
+                            output_params: JoinSwapExternAmountInOutput) -> dict:
+    pool = current_state['pool']
+    tokens_in_symbol = input_params.token_in.symbol
+    pool['pool_shares'] = Decimal(pool['pool_shares']) + output_params.pool_amount_out
+    pool['tokens'][tokens_in_symbol].balance += input_params.token_in.amount
+    return pool
+
+
+def p_exit_swap_plot_output(params, step, history, current_state, input_params, output_params):
+    pool = current_state['pool']
+    pool_token_out = pool['tokens'][output_params.token_out.symbol]
+    if not pool_token_out.bound:
+        raise Exception("ERR_NOT_BOUND")
+    pool_amount_in = input_params.pool_amount_in
+
+    pool['tokens'][output_params.token_out.symbol].balance -= output_params.token_out.amount
+
+    # Burn the user's incoming pool shares - exit fee
+    exit_fee = pool_amount_in * EXIT_FEE
+    pool['pool_shares'] = Decimal(pool['pool_shares']) - pool_amount_in - exit_fee
 
     return pool
 
