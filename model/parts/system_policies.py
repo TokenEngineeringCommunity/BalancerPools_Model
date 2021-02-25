@@ -15,6 +15,15 @@ from model.parts.pool_method_entities import JoinParamsInput, JoinParamsOutput, 
     JoinSwapExternAmountInOutput, SwapExactAmountInInput, SwapExactAmountInOutput, SwapExactAmountOutInput, SwapExactAmountOutOutput, ExitPoolInput, \
     ExitPoolOutput, ExitSwapPoolAmountInInput, ExitSwapPoolAmountInOutput, ExitSwapPoolExternAmountOutInput, ExitSwapPoolExternAmountOutOutput
 
+VERBOSE=False
+
+def update_fee(token_symbol: str, fee: Decimal, pool: dict):
+    generated_fees = pool['generated_fees']
+    for token in generated_fees:
+        if token == token_symbol:
+            generated_fees[token] = fee
+        else:
+            generated_fees[token] = Decimal('0')
 
 def calculate_total_denorm_weight(pool) -> Decimal:
     total_weight = Decimal('0')
@@ -59,7 +68,9 @@ class ActionDecoder:
             input_params, output_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
             answer = p_exit_pool(params, step, history, current_state, input_params, output_params)
         elif action['type'] == 'external_price_update':
-            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type']}
+            update_fee(token_symbol='', fee=Decimal('0'), pool=current_state['pool'])
+            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
+                    'pool_update': current_state['pool']}
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
         return {'pool_update': answer, 'change_datetime_update': timestamp, 'action_type': action['type']}
@@ -73,7 +84,9 @@ class ActionDecoder:
         if action['type'] != 'external_price_update':
             contract_call = ActionDecoder.action_df['contract_call'][idx][0]
         else:
-            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type']}
+            update_fee(token_symbol='', fee=Decimal('0'), pool=current_state['pool'])
+            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
+                    'pool_update': current_state['pool']}
         if contract_call['type'] == 'joinswapExternAmountIn':
             input_params, output_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_contract_call(action, contract_call)
             answer = p_join_swap_extern_amount_in(params, step, history, current_state, input_params, output_params)
@@ -131,7 +144,14 @@ class ActionDecoder:
         '''
         In this simplified model of Balancer, we have not modeled user behavior. Instead, we map events to actions.
         '''
-        decoding_type = params['decoding_type']
+        #When only 1 param this happens
+        if isinstance(params, list):
+            # 1 param
+            decoding_type = params[0]['decoding_type']
+        else:
+            #Parameter sweep
+            decoding_type = params['decoding_type']
+
         ActionDecoder.decoding_type = ActionDecodingType(decoding_type)
         idx = current_state['timestep'] + 1
         if ActionDecoder.decoding_type == ActionDecodingType.simplified:
@@ -172,8 +192,7 @@ def p_swap_exact_amount_in(params, step, history, current_state, input_params: S
         swap_fee=Decimal(swap_fee)
     )
 
-    generated_fees = pool['generated_fees']
-    generated_fees[token_in_symbol] = Decimal(generated_fees[token_in_symbol]) + swap_result.fee
+    update_fee(token_in_symbol, swap_result.fee, pool)
 
     pool_in_balance = pool_token_in.balance + token_amount_in
     pool_token_in.balance = pool_in_balance
@@ -221,11 +240,11 @@ def p_swap_exact_amount_out(params, step, history, current_state, input_params: 
         swap_fee=Decimal(swap_fee)
     )
     token_amount_in = swap_result.result
-    if token_amount_in > input_params.max_token_in.amount:
+    if token_amount_in > input_params.max_token_in.amount and VERBOSE:
         #raise Exception('ERR_LIMIT_IN')
         print(f"WARNING: token_amount_in {token_amount_in} > max {input_params.max_token_in.amount}")
-    generated_fees = pool['generated_fees']
-    generated_fees[token_in_symbol] = Decimal(generated_fees[token_in_symbol]) + swap_result.fee
+
+    update_fee(token_in_symbol, swap_result.fee, pool)
 
     pool_token_in.balance = pool_token_in.balance + token_amount_in
     pool_token_out.balance = pool_token_out.balance - token_amount_out
@@ -263,7 +282,7 @@ def p_join_pool(params, step, history, current_state, input_params: JoinParamsIn
         amount_expected = token.amount
         symbol = token.symbol
         amount = ratio * pool['tokens'][symbol].balance
-        if amount != amount_expected:
+        if amount != amount_expected and VERBOSE:
             print("WARNING: calculated that user should get {} {} but input specified that he should get {} {} instead".format(amount, symbol,
                                                                                                                                amount_expected,
                                                                                                                                symbol))
@@ -303,11 +322,11 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, input_par
         token_amount_in=Decimal(token_in_amount),
         swap_fee=Decimal(swap_fee)
     )
-    generated_fees = pool['generated_fees']
-    generated_fees[tokens_in_symbol] = Decimal(generated_fees[tokens_in_symbol]) + join_swap.fee
+
+    update_fee(tokens_in_symbol, join_swap.fee, pool)
 
     pool_amount_out = join_swap.result
-    if pool_amount_out != pool_amount_out_expected:
+    if pool_amount_out != pool_amount_out_expected and VERBOSE:
         print(
             "WARNING: calculated that user should get {} pool shares but input specified that he should get {} pool shares instead.".format(
                 pool_amount_out, pool_amount_out_expected))
@@ -360,12 +379,11 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, input_pa
     )
     pool_amount_in = exit_swap.result
 
-    generated_fees = pool['generated_fees']
-    generated_fees[token_out_symbol] = Decimal(generated_fees[token_out_symbol]) + exit_swap.fee
+    update_fee(token_out_symbol, exit_swap.fee, pool)
 
     if pool_amount_in == 0:
         raise Exception("ERR_MATH_APPROX")
-    if pool_amount_in != output_params.pool_amount_in:
+    if pool_amount_in != output_params.pool_amount_in and VERBOSE:
         print(
             "WARNING: calculated that pool should get {} pool shares but input specified that pool should get {} pool shares instead".format(
                 pool_amount_in, output_params.pool_amount_in))
