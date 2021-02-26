@@ -33,11 +33,12 @@ class JoinSwapExternAmountInOutput(object):
 
 @dataclass
 class JoinSwapPoolAmountOutInput(object):
-    pass
+    pool_amount_out: Decimal
+    max_token_in: TokenAmount
 
 @dataclass
 class JoinSwapPoolAmountOutOutput(object):
-    pass
+    token_in: TokenAmount
 
 @dataclass
 class SwapExactAmountInInput(object):

@@ -13,7 +13,8 @@ import pandas as pd
 
 from model.parts.pool_method_entities import JoinParamsInput, JoinParamsOutput, PoolMethodParamsDecoder, JoinSwapExternAmountInInput, \
     JoinSwapExternAmountInOutput, SwapExactAmountInInput, SwapExactAmountInOutput, SwapExactAmountOutInput, SwapExactAmountOutOutput, ExitPoolInput, \
-    ExitPoolOutput, ExitSwapPoolAmountInInput, ExitSwapPoolAmountInOutput, ExitSwapPoolExternAmountOutInput, ExitSwapPoolExternAmountOutOutput
+    ExitPoolOutput, ExitSwapPoolAmountInInput, ExitSwapPoolAmountInOutput, ExitSwapPoolExternAmountOutInput, ExitSwapPoolExternAmountOutOutput, \
+    JoinSwapPoolAmountOutOutput, JoinSwapPoolAmountOutInput
 
 VERBOSE = False
 
@@ -318,10 +319,36 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, input_par
     return pool
 
 
-def p_join_swap_pool_amount_out(params, step, history, current_state, input_params: JoinSwapExternAmountInInput,
-                                output_params: JoinSwapExternAmountInOutput):
+def p_join_swap_pool_amount_out(params, step, history, current_state, input_params: JoinSwapPoolAmountOutInput,
+                                output_params: JoinSwapPoolAmountOutOutput):
+    pool = current_state['pool']
+    max_token_in_amount = input_params.max_token_in.symbol
+    tokens_in_symbol = input_params.max_token_in.symbol
+    pool_amount_out = input_params.pool_amount_out
+    swap_fee = pool['swap_fee']
 
-    pass
+    total_weight = calculate_total_denorm_weight(pool)
+
+    join_swap = BalancerMath.calc_single_in_given_pool_out(
+        token_balance_in=Decimal(pool['tokens'][tokens_in_symbol].balance),
+        token_weight_in=Decimal(pool['tokens'][tokens_in_symbol].denorm_weight),
+        pool_supply=Decimal(pool['pool_shares']),
+        total_weight=total_weight,
+        pool_amount_out=pool_amount_out,
+        swap_fee=Decimal(swap_fee))
+
+    update_fee(tokens_in_symbol, join_swap.fee, pool)
+
+    token_in_amount = join_swap.result
+    if token_in_amount > max_token_in_amount and VERBOSE:
+        print(
+            "WARNING: calculated that user should get {} pool shares but input specified that he should get {} pool shares instead.".format(
+                pool_amount_out, max_token_in_amount))
+
+    pool['pool_shares'] = Decimal(pool['pool_shares']) + pool_amount_out
+    pool['tokens'][tokens_in_symbol].balance += token_in_amount
+
+    return pool
 
 
 def p_exit_swap_extern_amount_out(params, step, history, current_state, input_params: ExitSwapPoolExternAmountOutInput,
