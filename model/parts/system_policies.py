@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, getcontext
 # import ipdb
 from enum import Enum
 
@@ -17,6 +17,7 @@ from model.parts.pool_method_entities import JoinParamsInput, JoinParamsOutput, 
 
 VERBOSE = False
 
+getcontext().prec = 28
 
 def update_fee(token_symbol: str, fee: Decimal, pool: dict):
     generated_fees = pool['generated_fees']
@@ -54,6 +55,7 @@ class ActionDecoder:
     def p_simplified_action_decoder(idx, params, step, history, current_state):
         action = ActionDecoder.action_df['action'][idx]
         timestamp = ActionDecoder.action_df['timestamp'][idx]
+        tx_hash = ActionDecoder.action_df['tx_hash'][idx]
         if action['type'] == 'swap':
             input_params, output_params = PoolMethodParamsDecoder.swap_exact_amount_in_simplified(action)
             answer = p_swap_exact_amount_in(params, step, history, current_state, input_params, output_params)
@@ -81,7 +83,7 @@ class ActionDecoder:
     def p_contract_call_action_decoder(idx, params, step, history, current_state):
         action = ActionDecoder.action_df['action'][idx]
         timestamp = ActionDecoder.action_df['timestamp'][idx]
-        tx = ActionDecoder.action_df['tx_hash'][idx]
+        tx_hash = ActionDecoder.action_df['tx_hash'][idx]
         contract_call = None
         if action['type'] != 'external_price_update':
             contract_call = ActionDecoder.action_df['contract_call'][idx][0]
@@ -90,15 +92,12 @@ class ActionDecoder:
             return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
                     'pool_update': current_state['pool']}
         if contract_call['type'] == 'joinswapExternAmountIn':
-
             input_params, output_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_contract_call(action, contract_call)
             answer = p_join_swap_extern_amount_in(params, step, history, current_state, input_params, output_params)
         elif contract_call['type'] == 'joinPool':
             input_params, output_params = PoolMethodParamsDecoder.join_pool_contract_call(action, contract_call)
             answer = p_join_pool(params, step, history, current_state, input_params, output_params)
         elif contract_call['type'] == 'swapExactAmountIn':
-            print(current_state['pool'])
-            print(action)
             input_params, output_params = PoolMethodParamsDecoder.swap_exact_amount_in_contract_call(action, contract_call)
             answer = p_swap_exact_amount_in(params, step, history, current_state, input_params, output_params)
         elif contract_call['type'] == 'swapExactAmountOut':
@@ -190,20 +189,18 @@ def p_swap_exact_amount_in(params, step, history, current_state, input_params: S
 
     swap_result = BalancerMath.calc_out_given_in(
         token_balance_in=pool_token_in.balance,
-        token_weight_in=Decimal(str(pool_token_in.denorm_weight)),
+        token_weight_in=Decimal(pool_token_in.denorm_weight),
         token_balance_out=out_record.balance,
-        token_weight_out=Decimal(str(out_record.denorm_weight)),
+        token_weight_out=Decimal(out_record.denorm_weight),
         token_amount_in=token_amount_in,
         swap_fee=Decimal(swap_fee)
     )
 
     update_fee(token_in_symbol, swap_result.fee, pool)
-
     pool_in_balance = pool_token_in.balance + token_amount_in
     pool_token_in.balance = pool_in_balance
     pool_out_balance = out_record.balance - swap_result.result
     out_record.balance = pool_out_balance
-
     return pool
 
 
@@ -265,7 +262,6 @@ def p_join_pool(params, step, history, current_state, input_params: JoinParamsIn
 
     # tokens_in is a suggestion. The real fixed input is pool_amount_out - how many pool shares does the user want.
     # tokens_in will then be recalculated and that value used instead.
-    tokens_in = input_params.tokens_in
     pool_amount_out = input_params.pool_amount_out
 
     ratio = pool_amount_out / Decimal(pool['pool_shares'])
@@ -303,8 +299,8 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, input_par
         token_balance_in=Decimal(pool['tokens'][tokens_in_symbol].balance),
         token_weight_in=Decimal(pool['tokens'][tokens_in_symbol].denorm_weight),
         pool_supply=Decimal(pool['pool_shares']),
-        total_weight=Decimal(total_weight),
-        token_amount_in=Decimal(token_in_amount),
+        total_weight=total_weight,
+        token_amount_in=token_in_amount,
         swap_fee=Decimal(swap_fee)
     )
 
@@ -324,7 +320,7 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, input_par
 
 def p_join_swap_pool_amount_out(params, step, history, current_state, input_params: JoinSwapExternAmountInInput,
                                 output_params: JoinSwapExternAmountInOutput):
-    print('p_join_swap_pool_amount_out')
+
     pass
 
 
