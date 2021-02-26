@@ -1,10 +1,7 @@
 import argparse
-import glob
 import json
-import math
 import os
 import pickle
-import re
 import time
 import typing
 from datetime import datetime
@@ -12,17 +9,21 @@ from decimal import Decimal
 
 import dateutil
 import pandas as pd
-from action import Action
 from google.cloud import bigquery
 from web3 import Web3
 
+from action import Action
+from coingecko import add_prices_from_coingecko
+from tradingview import stage4_add_prices_to_initialstate_and_actions
+from utils import load_json, load_pickle, save_json, save_pickle, json_serialize_datetime
 from w3_utils import (BPoolLogCallParser, ERC20InfoReader,
                       TransactionReceiptGetter)
 
 parser = argparse.ArgumentParser(prog="pulldata",
                                  description="Ask Google Bigquery about a particular Balancer pool. Remember to set GOOGLE_APPLICATION_CREDENTIALS from https://cloud.google.com/docs/authentication/getting-started and export NODE_URL to a Geth node to get transaction receipts")
 parser.add_argument("pool_address")
-parser.add_argument("--fiat", "-f")
+parser.add_argument("price_provider", help="Can be either tradingview or coingecko. Tradingview requires the CSVs to already be in the pool_address subdirectory.")
+parser.add_argument("--fiat", "-f", default="USD")
 args = parser.parse_args()
 w3 = Web3(Web3.HTTPProvider(os.environ['NODE_URL']))
 erc20_info_getter = ERC20InfoReader(w3)
@@ -40,6 +41,7 @@ def query(client, sql: str) -> pd.DataFrame:
     )
     return result
 
+<<<<<<< HEAD
 
 def load_json(path):
     with open(path, 'r') as f:
@@ -67,6 +69,8 @@ def save_pickle(x, path):
         return pickle.dump(x, f)
 
 
+=======
+>>>>>>> 5c079b0 (coingecko works!)
 def save_queries_pickle(pool_address: str, event_type: str, df: pd.DataFrame):
     filename = f"{pool_address}/{event_type}.pickle"
     save_pickle(df, filename)
@@ -330,6 +334,7 @@ def stage3_merge_actions(pool_address, grouped_actions):
     actions_final.sort(key=lambda a: a['timestamp'])
     return actions_final
 
+<<<<<<< HEAD
 
 def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol: str, initial_state: typing.Dict, actions: typing.List[typing.Dict]):
     def parse_price_feeds(token_symbols: []) -> []:
@@ -424,6 +429,8 @@ def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol
     return initial_state_w_prices, actions_w_prices
 
 
+=======
+>>>>>>> 5c079b0 (coingecko works!)
 def produce_actions():
     new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results = stage1_load_sql_data(args.pool_address)
 
@@ -468,6 +475,7 @@ def produce_actions():
     # save_pickle(grouped_actions, "{}/grouped_actions.pickle".format(args.pool_address))
     # grouped_actions = load_pickle("{}/grouped_actions.pickle".format(args.pool_address))
 
+<<<<<<< HEAD
     actions_final = stage3_merge_actions(args.pool_address, grouped_actions)
 
     def prep_json_serialize(o):
@@ -475,17 +483,31 @@ def produce_actions():
             return o.isoformat()
 
     save_json(actions_final, f"{args.pool_address}-actions.json", default=prep_json_serialize)
+=======
+    actions = stage3_merge_actions(args.pool_address, grouped_actions)
+>>>>>>> 5c079b0 (coingecko works!)
 
-    # save_pickle(actions_final, f"{args.pool_address}/actions_final.pickle")
-    # actions_final = load_pickle(f"{args.pool_address}/actions_final.pickle")
+    save_json(actions, f"{args.pool_address}-actions.json", default=json_serialize_datetime)
 
+<<<<<<< HEAD
     if args.fiat:
         initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, args.fiat, initial_state,
                                                                                                  actions_final)
+=======
+    # save_pickle(actions, f"{args.pool_address}/actions.pickle")
+    # actions = load_pickle(f"{args.pool_address}/actions.pickle")
+
+    if args.price_provider == "tradingview":
+        initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, args.fiat, initial_state, actions)
+>>>>>>> 5c079b0 (coingecko works!)
         save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json')
         save_json(actions_w_prices, f'{args.pool_address}-actions-prices.json')
+    elif args.price_provider == "coingecko":
+        initial_state_w_prices, actions = add_prices_from_coingecko(initial_state, actions, args.pool_address, args.fiat)
+        save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json', default=json_serialize_datetime)
+        save_json(actions, f'{args.pool_address}-actions-prices.json', default=json_serialize_datetime)
     else:
-        print("Fiat base for token prices not given - skipping price data injection")
+        raise Exception("Wait a minute, {} is not a valid price provider".format(args.price_provider))
 
 
 # from ipdb import launch_ipdb_on_exception
