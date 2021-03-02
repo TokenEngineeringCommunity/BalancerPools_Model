@@ -124,7 +124,7 @@ def p_join_pool(params, step, history, current_state, action):
                                                                                                                                amount_expected,
                                                                                                                                symbol))
         pool['tokens'][symbol].balance += amount
-    pool['pool_shares'] += pool_amount_out
+    pool['pool_shares'] = Decimal(pool['pool_shares']) + pool_amount_out
 
     return pool
 
