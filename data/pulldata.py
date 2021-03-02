@@ -184,7 +184,6 @@ def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFra
         # Get basic info from first event log, no matter how many there actually are
         first_event_log = events.iloc[0]
         ts = first_event_log["block_timestamp"]
-        tx_hash = first_event_log["transaction_hash"]
         block_number = first_event_log.name
 
         # Invariant data that exists parallel to these actions. Merge them
@@ -193,9 +192,15 @@ def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFra
         denorm = format_denorms(denorms.loc[block_number].to_dict(orient="records"))
         # convert block_number and swap_fee to string to painlessly
         # convert to JSON later (numpy.int64 can't be JSON serialized)
-        a = Action(timestamp=ts.to_pydatetime(), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
-                   denorms=denorm, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
-        actions.append(a)
+        if first_event_log["type"] == "swap" and len(events) > 1:
+            print(txhash, "might be an aggregate swap")
+            for _, e in events.iterrows():
+                actions.append(Action(timestamp=ts.to_pydatetime(), tx_hash=txhash, block_number=str(block_number), swap_fee=str(fee),
+                    denorms=denorm, action_type=first_event_log["type"], action=[e.to_dict()]))
+        else:
+            a = Action(timestamp=ts.to_pydatetime(), tx_hash=txhash, block_number=str(block_number), swap_fee=str(fee),
+                    denorms=denorm, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
+            actions.append(a)
 
     return actions
 
