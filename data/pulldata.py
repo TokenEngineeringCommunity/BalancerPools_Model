@@ -184,7 +184,6 @@ def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFra
         # Get basic info from first event log, no matter how many there actually are
         first_event_log = events.iloc[0]
         ts = first_event_log["block_timestamp"]
-        tx_hash = first_event_log["transaction_hash"]
         block_number = first_event_log.name
 
         # Invariant data that exists parallel to these actions. Merge them
@@ -193,9 +192,15 @@ def turn_events_into_actions(events_list, fees: typing.Dict, denorms: pd.DataFra
         denorm = format_denorms(denorms.loc[block_number].to_dict(orient="records"))
         # convert block_number and swap_fee to string to painlessly
         # convert to JSON later (numpy.int64 can't be JSON serialized)
-        a = Action(timestamp=ts.to_pydatetime(), tx_hash=tx_hash, block_number=str(block_number), swap_fee=str(fee),
-                   denorms=denorm, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
-        actions.append(a)
+        if first_event_log["type"] == "swap" and len(events) > 1:
+            print(txhash, "might be an aggregate swap")
+            for _, e in events.iterrows():
+                actions.append(Action(timestamp=ts.to_pydatetime(), tx_hash=txhash, block_number=str(block_number), swap_fee=str(fee),
+                    denorms=denorm, action_type=first_event_log["type"], action=[e.to_dict()]))
+        else:
+            a = Action(timestamp=ts.to_pydatetime(), tx_hash=txhash, block_number=str(block_number), swap_fee=str(fee),
+                    denorms=denorm, action_type=first_event_log["type"], action=events.to_dict(orient="records"))
+            actions.append(a)
 
     return actions
 
@@ -305,13 +310,13 @@ def stage3_merge_actions(pool_address, grouped_actions):
     return actions_final
 
 def produce_actions():
-    new_results, join_results, swap_results, exit_results, transfer_results, fees_results, denorms_results = stage1_load_sql_data(args.pool_address)
+    new_events, join_events, swap_events, exit_events, transfer_events, fees_results, denorms_results = stage1_load_sql_data(args.pool_address)
 
-    new_results["type"] = "new"
-    join_results["type"] = "join"
-    swap_results["type"] = "swap"
-    exit_results["type"] = "exit"
-    transfer_results["type"] = "transfer"
+    new_events["type"] = "new"
+    join_events["type"] = "join"
+    swap_events["type"] = "swap"
+    exit_events["type"] = "exit"
+    transfer_events["type"] = "transfer"
 
     # Later we will drop the column "address" from denorms, because it is
     # just the pool address - it never changes.
@@ -323,28 +328,44 @@ def produce_actions():
     # Pandas, please don't truncate columns when I print them out
     pd.set_option('display.max_colwidth', None)
 
-    initial_state = stage2_produce_initial_state(new_results, fees_results, transfer_results)
+    initial_state = stage2_produce_initial_state(new_events, fees_results, transfer_events)
     # save_pickle(initial_state, f"{args.pool_address}/initial_state.pickle")
 
-    actions = []
-    actions.extend(turn_events_into_actions(new_results, fees_dict, denorms_results))
-    actions.extend(turn_events_into_actions(join_results, fees_dict, denorms_results))
-    actions.extend(turn_events_into_actions(swap_results, fees_dict, denorms_results))
-    actions.extend(turn_events_into_actions(exit_results, fees_dict, denorms_results))
-    actions.extend(turn_events_into_actions(transfer_results, fees_dict, denorms_results))
+    events = []
+    events.extend(turn_events_into_actions(new_events, fees_dict, denorms_results))
+    events.extend(turn_events_into_actions(join_events, fees_dict, denorms_results))
+    events.extend(turn_events_into_actions(swap_events, fees_dict, denorms_results))
+    events.extend(turn_events_into_actions(exit_events, fees_dict, denorms_results))
+    events.extend(turn_events_into_actions(transfer_events, fees_dict, denorms_results))
 
-    grouped_by_tx_actions = {}
-    for i, action in enumerate(actions):
-        tx_hash = actions[i].tx_hash
-        if grouped_by_tx_actions.get(tx_hash) is None:
-            grouped_by_tx_actions[tx_hash] = []
-        grouped_by_tx_actions[tx_hash].append(action)
-    grouped_actions = list(map(lambda key: grouped_by_tx_actions[key], grouped_by_tx_actions))
+    # save_pickle(events, f"{args.pool_address}/events.pickle")
+    # events = load_pickle(f"{args.pool_address}/events.pickle")
 
-    # Filter out pool share transfer
-    grouped_actions = list(filter(lambda acts: not (len(acts) == 1 and acts[0].action_type == 'transfer'), grouped_actions))
+    events_grouped_by_txhash = {}
+    for i, action in enumerate(events):
+        tx_hash = events[i].tx_hash
+        if events_grouped_by_txhash.get(tx_hash) is None:
+            events_grouped_by_txhash[tx_hash] = []
+        events_grouped_by_txhash[tx_hash].append(action)
+    # save_pickle(events_grouped_by_txhash, f'{args.pool_address}/events_grouped_by_txhash.pickle')
+    # events_grouped_by_txhash = load_pickle(f'{args.pool_address}/events_grouped_by_txhash.pickle')
 
-    actions = stage3_merge_actions(args.pool_address, grouped_actions)
+    def turn_grouped_by_txhash_events_into_list_and_ungroup_1inch_aggregated_swaps():
+        answer = []
+        def is_swap(actions):
+            return all([a.action_type == "swap" for a in actions])
+        for k, group in events_grouped_by_txhash.items():
+            if len(group) > 1 and is_swap(group):
+                for i in group: answer.append([i])
+            else:
+                answer.append(group)
+        return answer
+    grouped_events = turn_grouped_by_txhash_events_into_list_and_ungroup_1inch_aggregated_swaps()
+
+    # Remove pool share transfers
+    grouped_events = list(filter(lambda acts: not (len(acts) == 1 and acts[0].action_type == 'transfer'), grouped_events))
+
+    actions = stage3_merge_actions(args.pool_address, grouped_events)
 
     # save_pickle(actions, f"{args.pool_address}/actions.pickle")
     # actions = load_pickle(f"{args.pool_address}/actions.pickle")
