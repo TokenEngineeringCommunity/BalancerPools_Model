@@ -24,7 +24,7 @@
 	"action_type": "pool_creation",
 	"change_datetime": "2020-12-07T13:34:14+00:00",
 	"token_prices": {
-		"DAI": 1.0053414509361551,
-		"WETH": 594.3526451552318
+		"WETH": 596.48,
+		"DAI": 1.0049335
 	}
 }
