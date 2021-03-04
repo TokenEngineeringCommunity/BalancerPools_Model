@@ -92,7 +92,6 @@ def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol
 
     price_feed_paths, tokens = get_price_feeds_tokens(initial_state)
 
-    import ipdb; ipdb.set_trace()
     price_actions = parse_price_feeds(token_symbols=tokens)
     initial_state_w_prices = add_price_feeds_to_initial_state(price_actions, initial_state)
     actions_w_prices = add_price_feeds_to_actions(actions)
