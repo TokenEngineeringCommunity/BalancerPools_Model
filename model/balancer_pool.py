@@ -1,9 +1,8 @@
-from collections import namedtuple
-from decimal import Decimal, ROUND_HALF_DOWN
-import decimal
+from decimal import Decimal
 
-from model.balancer_constants import MAX_TOTAL_WEIGHT, MAX_WEIGHT, MIN_BALANCE, MIN_FEE, MAX_BOUND_TOKENS, INIT_POOL_SUPPLY, EXIT_FEE, MAX_IN_RATIO, MAX_OUT_RATIO, MIN_WEIGHT
-from model.balancer_math import BalancerMath
+from model.parts.balancer_constants import MAX_TOTAL_WEIGHT, MAX_WEIGHT, MIN_BALANCE, MIN_FEE, MAX_BOUND_TOKENS, INIT_POOL_SUPPLY, EXIT_FEE, MAX_IN_RATIO, \
+    MAX_OUT_RATIO, MIN_WEIGHT
+from model.parts.balancer_math import BalancerMath
 from dataclasses import dataclass
 
 
@@ -14,15 +13,18 @@ class TokenRecord:
     denorm: Decimal
     balance: Decimal
 
+
 @dataclass
 class SwapInResult:
     token_amount_out: Decimal
     spot_price_after: Decimal
 
+
 @dataclass
 class SwapOutResult:
     token_amount_in: Decimal
     spot_price_after: Decimal
+
 
 class BalancerPool(BalancerMath):
 
@@ -84,7 +86,7 @@ class BalancerPool(BalancerMath):
         if denorm > MAX_WEIGHT:
             raise Exception("ERR_MAX_WEIGHT")
         if balance < MIN_BALANCE:
-            raise Exception("ERR_MIN_BALANCE") 
+            raise Exception("ERR_MIN_BALANCE")
         old_weight = self._records[token].denorm
         if denorm > old_weight:
             self.total_weight = self.total_weight + (denorm - old_weight)
@@ -96,7 +98,7 @@ class BalancerPool(BalancerMath):
         old_balance = self._records[token].balance
         self._records[token].balance = balance
         if balance > old_balance:
-            return - (balance-old_balance)
+            return - (balance - old_balance)
         elif balance < old_balance:
             # In this case liquidity is being withdrawn, so charge EXIT_FEE
             token_balance_withdrawn = old_balance - balance
@@ -130,7 +132,7 @@ class BalancerPool(BalancerMath):
     def join_pool(self, pool_amount_out: Decimal, max_amounts_in: dict) -> dict:
         ratio = pool_amount_out / self._pool_token_supply
         if ratio == 0:
-          return Exception("ERR_MATH_APPROX")
+            return Exception("ERR_MATH_APPROX")
         results = {}
         for token in self._records:
             record = self._records[token]
@@ -151,10 +153,10 @@ class BalancerPool(BalancerMath):
         ratio = pool_amount_in_afer_exit_fee / pool_total
 
         return_dict = {
-          "exit_fee_pool_token": exit_fee
+            "exit_fee_pool_token": exit_fee
         }
         self._burn_pool_share(pool_amount_in_afer_exit_fee)
-        
+
         for token in self._records:
             record = self._records[token]
             token_amount_out = ratio * record.balance
@@ -165,8 +167,9 @@ class BalancerPool(BalancerMath):
             record.balance -= token_amount_out
             return_dict[token] = token_amount_out
         return return_dict
-    
-    def swap_exact_amount_in(self, token_in: str, token_amount_in: Decimal, token_out: str, min_amount_out: Decimal, max_price: Decimal) -> SwapInResult:
+
+    def swap_exact_amount_in(self, token_in: str, token_amount_in: Decimal, token_out: str, min_amount_out: Decimal,
+                             max_price: Decimal) -> SwapInResult:
         min_pool_amount_out = self._records[token_in]
         if not min_pool_amount_out.bound:
             raise Exception('ERR_NOT_BOUND')
@@ -177,37 +180,38 @@ class BalancerPool(BalancerMath):
         if token_amount_in > min_pool_amount_out.balance * MAX_IN_RATIO:
             raise Exception("ERR_MAX_IN_RATIO")
 
-
         spot_price_before = self.calc_spot_price(
-                                    token_balance_in=min_pool_amount_out.balance,
-                                    token_weight_in=min_pool_amount_out.denorm,
-                                    token_balance_out=out_record.balance,
-                                    token_weight_out=out_record.denorm,
-                                    swap_fee=self._swap_fee
-                                )
+            token_balance_in=min_pool_amount_out.balance,
+            token_weight_in=min_pool_amount_out.denorm,
+            token_balance_out=out_record.balance,
+            token_weight_out=out_record.denorm,
+            swap_fee=self._swap_fee
+        )
 
         if spot_price_before > max_price:
             raise Exception("ERR_BAD_LIMIT_PRICE")
         token_amount_out = self.calc_out_given_in(
-                            token_balance_in=min_pool_amount_out.balance,
-                            token_weight_in=min_pool_amount_out.denorm,
-                            token_balance_out=out_record.balance,
-                            token_weight_out=out_record.denorm,
-                            token_amount_in=token_amount_in,
-                            swap_fee=self._swap_fee
-                            )
-        # TODO require(token_amount_out >= min_amount_out, "ERR_LIMIT_OUT")
+            token_balance_in=min_pool_amount_out.balance,
+            token_weight_in=min_pool_amount_out.denorm,
+            token_balance_out=out_record.balance,
+            token_weight_out=out_record.denorm,
+            token_amount_in=token_amount_in,
+            swap_fee=self._swap_fee
+        ).result
+
+        if token_amount_out < min_amount_out:
+            raise Exception('ERR_LIMIT_OUT')
 
         min_pool_amount_out.balance += token_amount_in
         out_record.balance -= token_amount_out
 
         spot_price_after = self.calc_spot_price(
-                                token_balance_in=min_pool_amount_out.balance,
-                                token_weight_in=min_pool_amount_out.denorm,
-                                token_balance_out=out_record.balance,
-                                token_weight_out=out_record.denorm,
-                                swap_fee=self._swap_fee
-                           )
+            token_balance_in=min_pool_amount_out.balance,
+            token_weight_in=min_pool_amount_out.denorm,
+            token_balance_out=out_record.balance,
+            token_weight_out=out_record.denorm,
+            swap_fee=self._swap_fee
+        )
         if spot_price_after < spot_price_before:
             raise Exception("ERR_MATH_APPROX")
         if spot_price_after > max_price:
@@ -219,8 +223,8 @@ class BalancerPool(BalancerMath):
         # _pushUnderlying(token_out, msg.sender, token_amount_out)
         return SwapInResult(token_amount_out, spot_price_after)
 
-    
-    def swap_exact_amount_out(self, token_in: str, max_amount_in: Decimal, token_out: str, token_amount_out: Decimal, max_price: Decimal) -> SwapOutResult:
+    def swap_exact_amount_out(self, token_in: str, max_amount_in: Decimal, token_out: str, token_amount_out: Decimal,
+                              max_price: Decimal) -> SwapOutResult:
         min_pool_amount_out = self._records[token_in]
         if not min_pool_amount_out.bound:
             raise Exception('ERR_NOT_BOUND')
@@ -232,15 +236,15 @@ class BalancerPool(BalancerMath):
             raise Exception("ERR_MAX_OUT_RATIO")
 
         spot_price_before = self.calc_spot_price(
-                                token_balance_in=min_pool_amount_out.balance,
-                                token_weight_in=min_pool_amount_out.denorm,
-                                token_balance_out=out_record.balance,
-                                token_weight_out=out_record.denorm,
-                                swap_fee=self._swap_fee
-                            )
+            token_balance_in=min_pool_amount_out.balance,
+            token_weight_in=min_pool_amount_out.denorm,
+            token_balance_out=out_record.balance,
+            token_weight_out=out_record.denorm,
+            swap_fee=self._swap_fee
+        )
         if spot_price_before > max_price:
             raise Exception('ERR_BAD_LIMIT_PRICE')
-        
+
         token_amount_in = self.calc_in_given_out(
             token_balance_in=min_pool_amount_out.balance,
             token_weight_in=min_pool_amount_out.denorm,
@@ -248,7 +252,7 @@ class BalancerPool(BalancerMath):
             token_weight_out=out_record.denorm,
             token_amount_out=token_amount_out,
             swap_fee=self._swap_fee
-        )
+        ).result
         if token_amount_in > max_amount_in:
             raise Exception('ERR_LIMIT_IN')
 
@@ -261,7 +265,7 @@ class BalancerPool(BalancerMath):
             token_balance_out=out_record.balance,
             token_weight_out=out_record.denorm,
             swap_fee=self._swap_fee
-            )
+        )
         if spot_price_after < spot_price_before:
             raise Exception('ERR_MATH_APPROX')
         if spot_price_after > max_price:
@@ -275,7 +279,6 @@ class BalancerPool(BalancerMath):
 
         return SwapOutResult(token_amount_in=token_amount_in, spot_price_after=spot_price_after)
 
-   
     # @notice Join by swapping a fixed amount of an external token in (must be present in the pool)
     #        System calculates the pool token amount
     # @notice CAN'T BE USED IN SMART POOLS (not finalized)
@@ -288,9 +291,9 @@ class BalancerPool(BalancerMath):
         # require(_finalized, "ERR_NOT_FINALIZED")
         if not self._records[token_in].bound:
             raise Exception("ERR_NOT_BOUND")
-        if token_amount_in > self._records[token_in].balance *  MAX_IN_RATIO:
+        if token_amount_in > self._records[token_in].balance * MAX_IN_RATIO:
             raise Exception("ERR_MAX_IN_RATIO")
-    
+
         in_record = self._records[token_in]
 
         pool_amount_out = self.calc_pool_out_given_single_in(
@@ -300,7 +303,7 @@ class BalancerPool(BalancerMath):
             total_weight=self.total_weight,
             token_amount_in=token_amount_in,
             swap_fee=self._swap_fee
-        )
+        ).result
 
         if pool_amount_out < min_pool_amount_out:
             raise Exception("ERR_LIMIT_OUT")
@@ -313,31 +316,29 @@ class BalancerPool(BalancerMath):
         # _pullUnderlying(token_in, msg.sender, token_amount_in)
         return pool_amount_out
 
-    
-
     def join_swap_pool_amount_out(self, token_in: str, pool_amount_out: Decimal, max_amount_in: Decimal) -> Decimal:
         if not self._records[token_in].bound:
             raise Exception("ERR_NOT_BOUND")
-        
+
         in_record = self._records[token_in]
 
         token_amount_in = self.calc_single_in_given_pool_out(
-          token_balance_in = in_record.balance,
-          token_weight_in = in_record.denorm,
-          pool_supply = self._pool_token_supply,
-          total_weight = self.total_weight,
-          pool_amount_out = pool_amount_out,
-          swap_fee = self._swap_fee)
+            token_balance_in=in_record.balance,
+            token_weight_in=in_record.denorm,
+            pool_supply=self._pool_token_supply,
+            total_weight=self.total_weight,
+            pool_amount_out=pool_amount_out,
+            swap_fee=self._swap_fee).result
 
         if token_amount_in == 0:
-          raise Exception("ERR_MATH_APPROX")
+            raise Exception("ERR_MATH_APPROX")
 
         if token_amount_in > max_amount_in:
-          raise Exception("ERR_LIMIT_IN")
+            raise Exception("ERR_LIMIT_IN")
 
         if token_amount_in > in_record.balance * MAX_IN_RATIO:
-          raise Exception("ERR_MAX_IN_RATIO")
-        
+            raise Exception("ERR_MAX_IN_RATIO")
+
         in_record.balance = in_record.balance + token_amount_in
         self._mint_pool_share(pool_amount_out)
         # NOTE not modeling balance change for sender
@@ -353,18 +354,18 @@ class BalancerPool(BalancerMath):
         out_record = self._records[token_out]
 
         token_amount_out = self.calc_single_out_given_pool_in(
-          token_balance_out=out_record.balance,
-          token_weight_out=out_record.denorm,
-          pool_supply=self._pool_token_supply,
-          total_weight=self.total_weight,
-          pool_amount_in=pool_amount_in, 
-          swap_fee=self._swap_fee)
+            token_balance_out=out_record.balance,
+            token_weight_out=out_record.denorm,
+            pool_supply=self._pool_token_supply,
+            total_weight=self.total_weight,
+            pool_amount_in=pool_amount_in,
+            swap_fee=self._swap_fee).result
 
         if token_amount_out < min_amount_out:
-          raise Exception("ERR_LIMIT_OUT")
+            raise Exception("ERR_LIMIT_OUT")
         if token_amount_out > out_record.balance * MAX_OUT_RATIO:
-          raise Exception("ERR_MAX_OUT_RATIO")
-        
+            raise Exception("ERR_MAX_OUT_RATIO")
+
         out_record.balance = out_record.balance - token_amount_out
 
         exit_fee = pool_amount_in * EXIT_FEE
@@ -383,26 +384,23 @@ class BalancerPool(BalancerMath):
         if token_amount_out > out_record.balance * MAX_OUT_RATIO:
             raise Exception("ERR_MAX_OUT_RATIO")
 
-
         pool_amount_in = self.calc_pool_in_given_single_out(
-          token_balance_out=out_record.balance,
-          token_weight_out=out_record.denorm,
-          pool_supply=self._pool_token_supply,
-          total_weight=self.total_weight,
-          token_amount_out=token_amount_out,
-          swap_fee=self._swap_fee
-        )
+            token_balance_out=out_record.balance,
+            token_weight_out=out_record.denorm,
+            pool_supply=self._pool_token_supply,
+            total_weight=self.total_weight,
+            token_amount_out=token_amount_out,
+            swap_fee=self._swap_fee
+        ).result
         if pool_amount_in == 0:
-          raise Exception("ERR_MATH_APPROX")
+            raise Exception("ERR_MATH_APPROX")
         if pool_amount_in > max_pool_amount_in:
-          raise Exception("ERR_LIMIT_IN")
-        
+            raise Exception("ERR_LIMIT_IN")
+
         out_record.balance -= token_amount_out
 
         exitFee = pool_amount_in * EXIT_FEE
         self._burn_pool_share(pool_amount_in - exitFee)
 
-        #_pushPoolShare(_factory, exitFee);
+        # _pushPoolShare(_factory, exitFee);
         return pool_amount_in;
-    
-        

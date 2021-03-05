@@ -1,8 +1,7 @@
 import unittest
 from decimal import Decimal
-from unittest.case import skip
 
-from model.balancer_constants import EXIT_FEE
+from model.parts.balancer_constants import EXIT_FEE
 from model.balancer_pool import BalancerPool
 
 
