@@ -1,4 +1,4 @@
-from decimal import Decimal, getcontext
+from decimal import Decimal
 # import ipdb
 from enum import Enum
 
@@ -137,7 +137,8 @@ class ActionDecoder:
             input_params, output_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
             answer = p_exit_pool_plot_output(params, step, history, current_state, input_params, output_params)
         elif action['type'] == 'external_price_update':
-            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type']}
+            update_fee(token_symbol='', fee=Decimal('0'), pool=current_state['pool'])
+            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'], 'pool_update': current_state['pool']}
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
         return {'pool_update': answer, 'change_datetime_update': timestamp, 'action_type': action['type']}

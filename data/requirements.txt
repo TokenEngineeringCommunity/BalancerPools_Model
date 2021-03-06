@@ -6,8 +6,6 @@ cffi==1.14.4
 chardet==4.0.0
 cryptography==3.3.1
 dacktool==0.0.7
-dataclasses==0.6
-dataclasses-json==0.5.2
 dbstream==0.0.30
 google-api-core==1.25.1
 google-api-python-client==1.7.11

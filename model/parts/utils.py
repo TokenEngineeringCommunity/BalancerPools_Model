@@ -12,7 +12,7 @@ def unpack_column_tokens(column_tokens: pd.Series, token_symbols: typing.List[st
             di[f'token_{symbol}_weight'].append(r[symbol.upper()].weight)
             di[f'token_{symbol}_denorm_weight'].append(r[symbol.upper()].denorm_weight)
             di[f'token_{symbol}_balance'].append(r[symbol.upper()].balance)
-    return pd.DataFrame.from_dict(di)
+    return pd.DataFrame.from_dict(di).astype('float64')
 
 
 def unpack_column_generated_fees(column_fees: pd.Series, token_symbols: typing.List[str]) -> pd.DataFrame:
@@ -57,7 +57,7 @@ def unpack_column_spot_prices(df: pd.DataFrame) -> pd.DataFrame:
         di[f'token_{symbol_low}_spot_price'] = []
         for r in column_spot_prices:
             di[f'token_{symbol_low}_spot_price'].append(r[symbol])
-    return pd.DataFrame.from_dict(di)
+    return pd.DataFrame.from_dict(di).astype('float64')
 
 
 def assets_in_df(df: pd.DataFrame) -> typing.List[str]:
@@ -84,8 +84,9 @@ def post_processing(df: pd.DataFrame, include_spot_prices=False) -> pd.DataFrame
         unpacked_column_spot_prices = unpack_column_spot_prices(df)
         df = df.assign(**unpacked_column_spot_prices)
 
-    # Convert change_datetime from str to datetime
+    # Convert change_datetime from str to datetime, other columns to float64
     df["change_datetime"] = pd.to_datetime(df["change_datetime"], utc=True)
+    df = df.astype({"pool_shares": "float64", "swap_fee": "float64"})
 
     # Calculate token_{x}_value columns
     token_x_value = calc_token_x_value(df)
@@ -102,4 +103,7 @@ def post_processing(df: pd.DataFrame, include_spot_prices=False) -> pd.DataFrame
     column_total_token_balances = df[token_balance_columns].sum(axis=1)
     df = df.assign(total_token_balances=column_total_token_balances)
 
+    # Convert generated_fees_(token) columns from str or Decimal to float64
+    generated_fees_columns = [f'generated_fees_{s}' for s in symbols]
+    for generated_fee_col in generated_fees_columns: df[generated_fee_col] = df[generated_fee_col].astype('float64')
     return df

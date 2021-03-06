@@ -1,0 +1,38 @@
+{
+	"pool": {
+		"tokens": {
+			"BAL": {
+				"weight": "50.0",
+				"denorm_weight": "25",
+				"balance": "2412.683823529411763228",
+				"bound": true
+			},
+			"WBTC": {
+				"weight": "34.00",
+				"denorm_weight": "17",
+				"balance": "18298383",
+				"bound": true
+			},
+			"WETH": {
+				"weight": "16.00",
+				"denorm_weight": "8",
+				"balance": "23.707607525864073665",
+				"bound": true
+			}
+		},
+		"generated_fees": {
+			"BAL": "0.0",
+			"WBTC": "0.0",
+			"WETH": "0.0"
+		},
+		"pool_shares": "100",
+		"swap_fee": "0.0015"
+	},
+	"action_type": "pool_creation",
+	"change_datetime": "2020-07-28T01:25:23+00:00",
+	"token_prices": {
+		"BAL": 9.946310037733221,
+		"WBTC": 11187.632571049704,
+		"WETH": 325.30320314680654
+	}
+}
