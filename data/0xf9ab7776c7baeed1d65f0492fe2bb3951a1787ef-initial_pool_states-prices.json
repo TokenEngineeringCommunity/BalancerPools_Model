@@ -2,19 +2,19 @@
 	"pool": {
 		"tokens": {
 			"BAL": {
-				"weight": "50.0",
+				"weight": "0.5",
 				"denorm_weight": "25",
 				"balance": "2412.683823529411763228",
 				"bound": true
 			},
 			"WBTC": {
-				"weight": "34.00",
+				"weight": "0.34",
 				"denorm_weight": "17",
 				"balance": "18298383",
 				"bound": true
 			},
 			"WETH": {
-				"weight": "16.00",
+				"weight": "0.16",
 				"denorm_weight": "8",
 				"balance": "23.707607525864073665",
 				"bound": true

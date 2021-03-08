@@ -98,6 +98,17 @@ def post_processing(df: pd.DataFrame, include_spot_prices=False) -> pd.DataFrame
     column_tvl = df[token_value_columns].sum(axis=1)
     df = df.assign(tvl=column_tvl)
 
+    # Calculate Invariant column
+    invariant = None
+    for s in symbols:
+        if invariant is None:
+            invariant = df[f'token_{s}_balance'] ** df[f'token_{s}_weight']
+            print(invariant)
+        else:
+            invariant *= (df[f'token_{s}_balance'] ** df[f'token_{s}_weight'])
+            print(invariant)
+    df = df.assign(invariant=invariant)
+
     # Calculate total_token_balances
     token_balance_columns = [f'token_{s}_balance' for s in symbols]
     column_total_token_balances = df[token_balance_columns].sum(axis=1)
