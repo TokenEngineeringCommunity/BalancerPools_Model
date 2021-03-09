@@ -78,7 +78,7 @@ def get_initial_token_distribution(new_results) -> dict:
 
     for (key, token) in tokens.items():
         denorm = Decimal(token['denorm_weight'])
-        token['weight'] = str(Decimal('100') * (denorm / total_denorm_weight))
+        token['weight'] = str(denorm / total_denorm_weight)
     return tokens
 
 
@@ -329,6 +329,7 @@ def produce_actions():
     pd.set_option('display.max_colwidth', None)
 
     initial_state = stage2_produce_initial_state(new_events, fees_results, transfer_events)
+
     # save_pickle(initial_state, f"{args.pool_address}/initial_state.pickle")
 
     events = []
