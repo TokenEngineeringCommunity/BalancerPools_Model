@@ -2,13 +2,13 @@
 	"pool": {
 		"tokens": {
 			"DAI": {
-				"weight": "20.0",
+				"weight": "0.2",
 				"denorm_weight": "10",
 				"balance": "10000000",
 				"bound": true
 			},
 			"WETH": {
-				"weight": "80.0",
+				"weight": "0.8",
 				"denorm_weight": "40",
 				"balance": "67738.636173102396002749",
 				"bound": true
