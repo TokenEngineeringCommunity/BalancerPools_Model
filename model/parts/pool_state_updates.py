@@ -35,7 +35,13 @@ def s_update_spot_prices(params, substep, state_history, previous_state, policy_
     if pool is None:
         return 'spot_prices', previous_state['spot_prices']
 
-    ref_token = params[0]['spot_price_reference']
+    if isinstance(params, list):
+        # 1 param
+        ref_token = params[0]['spot_price_reference']
+    else:
+        # Parameter sweep
+        ref_token = params['spot_price_reference']
+
 
     spot_prices = calculate_spot_prices(pool, ref_token)
     return 'spot_prices', spot_prices
