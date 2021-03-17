@@ -1,3 +1,4 @@
+import typing
 from decimal import Decimal, getcontext
 # import ipdb
 from enum import Enum
@@ -20,13 +21,15 @@ VERBOSE = False
 
 getcontext().prec = 28
 
-def update_fee(token_symbol: str, fee: Decimal, pool: dict):
-    generated_fees = pool['generated_fees']
+def update_fee(token_symbol: str, fee: Decimal, pool: dict) -> typing.Dict:
+    generated_fees = pool['generated_fees'].copy()
     for token in generated_fees:
         if token == token_symbol:
             generated_fees[token] = fee
         else:
             generated_fees[token] = Decimal('0')
+
+    return generated_fees
 
 
 def calculate_total_denorm_weight(pool) -> Decimal:
@@ -172,7 +175,7 @@ class ActionDecoder:
 
 def p_swap_exact_amount_in(params, step, history, current_state, input_params: SwapExactAmountInInput,
                            output_params: SwapExactAmountInOutput) -> dict:
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     # Parse action params
     token_in_symbol = input_params.token_in.symbol
     token_amount_in = input_params.token_in.amount
@@ -198,7 +201,7 @@ def p_swap_exact_amount_in(params, step, history, current_state, input_params: S
         swap_fee=Decimal(swap_fee)
     )
 
-    update_fee(token_in_symbol, swap_result.fee, pool)
+    pool["generated_fees"] = update_fee(token_in_symbol, swap_result.fee, pool)
     pool_in_balance = pool_token_in.balance + token_amount_in
     pool_token_in.balance = pool_in_balance
     pool_out_balance = out_record.balance - swap_result.result
@@ -208,7 +211,7 @@ def p_swap_exact_amount_in(params, step, history, current_state, input_params: S
 
 def p_swap_plot_output(params, step, history, current_state, input_params: SwapExactAmountInInput,
                        output_params: SwapExactAmountInOutput) -> dict:
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     pool_token_in = pool['tokens'][input_params.token_in.symbol]
     pool_token_out = pool['tokens'][output_params.token_out.symbol]
 
@@ -219,7 +222,7 @@ def p_swap_plot_output(params, step, history, current_state, input_params: SwapE
 
 def p_swap_exact_amount_out(params, step, history, current_state, input_params: SwapExactAmountOutInput,
                             output_params: SwapExactAmountOutOutput) -> dict:
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     # Parse action params
     token_in_symbol = input_params.max_token_in.symbol
     token_amount_out = input_params.token_out.amount
@@ -248,7 +251,7 @@ def p_swap_exact_amount_out(params, step, history, current_state, input_params: 
         # raise Exception('ERR_LIMIT_IN')
         print(f"WARNING: token_amount_in {token_amount_in} > max {input_params.max_token_in.amount}")
 
-    update_fee(token_in_symbol, swap_result.fee, pool)
+    pool["generated_fees"] = update_fee(token_in_symbol, swap_result.fee, pool)
 
     pool_token_in.balance = pool_token_in.balance + token_amount_in
     pool_token_out.balance = pool_token_out.balance - token_amount_out
@@ -260,7 +263,7 @@ def p_join_pool(params, step, history, current_state, input_params: JoinParamsIn
     """
     Join a pool by providing liquidity for all token_symbols.
     """
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
 
     # tokens_in is a suggestion. The real fixed input is pool_amount_out - how many pool shares does the user want.
     # tokens_in will then be recalculated and that value used instead.
@@ -289,7 +292,7 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, input_par
     """
     Join a pool by providing liquidity for a single token_symbol.
     """
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     tokens_in_symbol = input_params.token_in.symbol
     token_in_amount = input_params.token_in.amount
     pool_amount_out_expected = output_params.pool_amount_out
@@ -306,7 +309,7 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, input_par
         swap_fee=Decimal(swap_fee)
     )
 
-    update_fee(tokens_in_symbol, join_swap.fee, pool)
+    pool["generated_fees"] = update_fee(tokens_in_symbol, join_swap.fee, pool)
 
     pool_amount_out = join_swap.result
     if pool_amount_out != pool_amount_out_expected and VERBOSE:
@@ -322,7 +325,7 @@ def p_join_swap_extern_amount_in(params, step, history, current_state, input_par
 
 def p_join_swap_pool_amount_out(params, step, history, current_state, input_params: JoinSwapPoolAmountOutInput,
                                 output_params: JoinSwapPoolAmountOutOutput):
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     max_token_in_amount = input_params.max_token_in.symbol
     tokens_in_symbol = input_params.max_token_in.symbol
     pool_amount_out = input_params.pool_amount_out
@@ -338,7 +341,7 @@ def p_join_swap_pool_amount_out(params, step, history, current_state, input_para
         pool_amount_out=pool_amount_out,
         swap_fee=Decimal(swap_fee))
 
-    update_fee(tokens_in_symbol, join_swap.fee, pool)
+    pool["generated_fees"] = update_fee(tokens_in_symbol, join_swap.fee, pool)
 
     token_in_amount = join_swap.result
     if token_in_amount > max_token_in_amount and VERBOSE:
@@ -357,7 +360,7 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, input_pa
     """
     Exit a pool by withdrawing liquidity for a single token_symbol.
     """
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     swap_fee = pool['swap_fee']
     token_out_symbol = input_params.token_out.symbol
     # Check that all tokens_out are bound
@@ -380,7 +383,7 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, input_pa
     )
     pool_amount_in = exit_swap.result
 
-    update_fee(token_out_symbol, exit_swap.fee, pool)
+    pool["generated_fees"] = update_fee(token_out_symbol, exit_swap.fee, pool)
 
     if pool_amount_in == 0:
         raise Exception("ERR_MATH_APPROX")
@@ -400,7 +403,7 @@ def p_exit_swap_extern_amount_out(params, step, history, current_state, input_pa
 
 def p_exit_swap_pool_amount_in(params, step, history, current_state, input_params: ExitSwapPoolAmountInInput,
                                output_params: ExitSwapPoolAmountInOutput) -> dict:
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     swap_fee = pool['swap_fee']
     pool_token_out = pool['tokens'][output_params.token_out.symbol]
     if not pool_token_out.bound:
@@ -434,9 +437,9 @@ def p_exit_swap_pool_amount_in(params, step, history, current_state, input_param
 
 def p_exit_pool(params, step, history, current_state, input_params: ExitPoolInput, output_params: ExitPoolOutput) -> dict:
     """
-        Exit a pool by withdrawing liquidity for all token_symbol.
+    Exit a pool by withdrawing liquidity for all token_symbol.
     """
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     pool_shares = Decimal(pool['pool_shares'])
     pool_amount_in = input_params.pool_amount_in
 
@@ -459,7 +462,7 @@ def p_exit_pool(params, step, history, current_state, input_params: ExitPoolInpu
 # PLOT OUTPUT
 
 def p_join_pool_plot_output(params, step, history, current_state, input_params: JoinParamsInput, output_params: JoinParamsOutput) -> dict:
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     pool_amount_out = input_params.pool_amount_out
     for token in output_params.tokens_in:
         pool['tokens'][token.symbol].balance += token.amount
@@ -469,7 +472,7 @@ def p_join_pool_plot_output(params, step, history, current_state, input_params: 
 
 def p_join_swap_plot_output(params, step, history, current_state, input_params: JoinSwapExternAmountInInput,
                             output_params: JoinSwapExternAmountInOutput) -> dict:
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     tokens_in_symbol = input_params.token_in.symbol
     pool['pool_shares'] = Decimal(pool['pool_shares']) + output_params.pool_amount_out
     pool['tokens'][tokens_in_symbol].balance += input_params.token_in.amount
@@ -477,7 +480,7 @@ def p_join_swap_plot_output(params, step, history, current_state, input_params: 
 
 
 def p_exit_swap_plot_output(params, step, history, current_state, input_params, output_params):
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     pool_token_out = pool['tokens'][output_params.token_out.symbol]
     if not pool_token_out.bound:
         raise Exception("ERR_NOT_BOUND")
@@ -493,7 +496,7 @@ def p_exit_swap_plot_output(params, step, history, current_state, input_params, 
 
 
 def p_exit_pool_plot_output(params, step, history, current_state, input_params, output_params):
-    pool = current_state['pool']
+    pool = current_state['pool'].copy()
     pool_shares = Decimal(pool['pool_shares'])
     pool_amount_in = input_params.pool_amount_in
 

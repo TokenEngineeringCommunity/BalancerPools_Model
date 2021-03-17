@@ -31,9 +31,7 @@ def calculate_spot_prices(pool: dict, ref_token: str):
 
 
 def s_update_spot_prices(params, substep, state_history, previous_state, policy_input):
-    pool = policy_input.get('pool_update')
-    if pool is None:
-        return 'spot_prices', previous_state['spot_prices']
+    pool = previous_state["pool"]
 
     if isinstance(params, list):
         # 1 param
@@ -45,4 +43,3 @@ def s_update_spot_prices(params, substep, state_history, previous_state, policy_
 
     spot_prices = calculate_spot_prices(pool, ref_token)
     return 'spot_prices', spot_prices
-
