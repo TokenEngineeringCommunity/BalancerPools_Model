@@ -14,7 +14,6 @@ import pandas as pd
 
 
 
-VERBOSE = False
 
 getcontext().prec = 28
 
@@ -40,27 +39,22 @@ class ActionDecoder:
         timestamp = ActionDecoder.action_df['timestamp'][idx]
         tx_hash = ActionDecoder.action_df['tx_hash'][idx]
         if action['type'] == 'swap':
-            input_params, output_params = PoolMethodParamsDecoder.swap_exact_amount_in_simplified(action)
-            answer = p_swap_exact_amount_in(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.swap_exact_amount_in_simplified(action)
         elif action['type'] == 'join':
-            input_params, output_params = PoolMethodParamsDecoder.join_pool_simplified(action)
-            answer = p_join_pool(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.join_pool_simplified(action)
         elif action['type'] == 'join_swap':
-            input_params, output_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_simplified(action)
-            answer = p_join_swap_extern_amount_in(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_simplified(action)
         elif action['type'] == 'exit_swap':
-            input_params, output_params = PoolMethodParamsDecoder.exit_swap_pool_amount_in_simplified(action)
-            answer = p_exit_swap_pool_amount_in(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.exit_swap_pool_amount_in_simplified(action)
         elif action['type'] == 'exit':
-            input_params, output_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
-            answer = p_exit_pool(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
         elif action['type'] == 'external_price_update':
             update_fee(token_symbol='', fee=Decimal('0'), pool=current_state['pool'])
             return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
-                    'pool_update': current_state['pool']}
+                    'pool_update': None}
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
-        return {'pool_update': answer, 'change_datetime_update': timestamp, 'action_type': action['type']}
+        return {'pool_update': pool_method_params, 'change_datetime_update': timestamp, 'action_type': action['type']}
 
     @staticmethod
     def p_contract_call_action_decoder(idx, params, step, history, current_state):
@@ -73,57 +67,45 @@ class ActionDecoder:
         else:
             update_fee(token_symbol='', fee=Decimal('0'), pool=current_state['pool'])
             return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
-                    'pool_update': current_state['pool']}
+                    'pool_update': None}
         if contract_call['type'] == 'joinswapExternAmountIn':
-            input_params, output_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_contract_call(action, contract_call)
-            answer = p_join_swap_extern_amount_in(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_contract_call(action, contract_call)
         elif contract_call['type'] == 'joinPool':
-            input_params, output_params = PoolMethodParamsDecoder.join_pool_contract_call(action, contract_call)
-            answer = p_join_pool(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.join_pool_contract_call(action, contract_call)
         elif contract_call['type'] == 'swapExactAmountIn':
-            input_params, output_params = PoolMethodParamsDecoder.swap_exact_amount_in_contract_call(action, contract_call)
-            answer = p_swap_exact_amount_in(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.swap_exact_amount_in_contract_call(action, contract_call)
         elif contract_call['type'] == 'swapExactAmountOut':
-            input_params, output_params = PoolMethodParamsDecoder.swap_exact_amount_out_contract_call(action, contract_call)
-            answer = p_swap_exact_amount_out(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.swap_exact_amount_out_contract_call(action, contract_call)
         elif contract_call['type'] == 'exitPool':
-            input_params, output_params = PoolMethodParamsDecoder.exit_pool_contract_call(action, contract_call)
-            answer = p_exit_pool(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.exit_pool_contract_call(action, contract_call)
         elif contract_call['type'] == 'exitswapPoolAmountIn':
-            input_params, output_params = PoolMethodParamsDecoder.exit_swap_pool_amount_in_contract_call(action, contract_call)
-            answer = p_exit_swap_pool_amount_in(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.exit_swap_pool_amount_in_contract_call(action, contract_call)
         elif contract_call['type'] == 'exitswapExternAmountOut':
-            input_params, output_params = PoolMethodParamsDecoder.exit_swap_extern_amount_out_contract_call(action, contract_call)
-            answer = p_exit_swap_extern_amount_out(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.exit_swap_extern_amount_out_contract_call(action, contract_call)
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
-        return {'pool_update': answer, 'change_datetime_update': timestamp, 'action_type': action['type']}
+        return {'pool_update': pool_method_params, 'change_datetime_update': timestamp, 'action_type': action['type']}
 
     @staticmethod
     def p_plot_output_action_decoder(idx, params, step, history, current_state):
         action = ActionDecoder.action_df['action'][idx]
         timestamp = ActionDecoder.action_df['timestamp'][idx]
         if action['type'] == 'swap':
-            input_params, output_params = PoolMethodParamsDecoder.swap_exact_amount_in_simplified(action)
-            answer = p_swap_plot_output(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.swap_exact_amount_in_simplified(action)
         elif action['type'] == 'join':
-            input_params, output_params = PoolMethodParamsDecoder.join_pool_simplified(action)
-            answer = p_join_pool_plot_output(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.join_pool_simplified(action)
         elif action['type'] == 'join_swap':
-            input_params, output_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_simplified(action)
-            answer = p_join_swap_plot_output(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_simplified(action)
         elif action['type'] == 'exit_swap':
-            input_params, output_params = PoolMethodParamsDecoder.exit_swap_pool_amount_in_simplified(action)
-            answer = p_exit_swap_plot_output(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.exit_swap_pool_amount_in_simplified(action)
         elif action['type'] == 'exit':
-            input_params, output_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
-            answer = p_exit_pool_plot_output(params, step, history, current_state, input_params, output_params)
+            pool_method_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
         elif action['type'] == 'external_price_update':
             update_fee(token_symbol='', fee=Decimal('0'), pool=current_state['pool'])
             return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'], 'pool_update': current_state['pool']}
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
-        return {'pool_update': answer, 'change_datetime_update': timestamp, 'action_type': action['type']}
+        return {'pool_update': pool_method_params, 'change_datetime_update': timestamp, 'action_type': action['type']}
 
     @staticmethod
     def p_action_decoder(params, step, history, current_state):
