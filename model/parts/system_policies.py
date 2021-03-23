@@ -49,7 +49,6 @@ class ActionDecoder:
         elif action['type'] == 'exit':
             pool_method_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
         elif action['type'] == 'external_price_update':
-            update_fee(token_symbol='', fee=Decimal('0'), pool=current_state['pool'])
             return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
                     'pool_update': None}
         else:
@@ -65,7 +64,6 @@ class ActionDecoder:
         if action['type'] != 'external_price_update':
             contract_call = ActionDecoder.action_df['contract_call'][idx][0]
         else:
-            update_fee(token_symbol='', fee=Decimal('0'), pool=current_state['pool'])
             return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
                     'pool_update': None}
         if contract_call['type'] == 'joinswapExternAmountIn':
@@ -101,8 +99,7 @@ class ActionDecoder:
         elif action['type'] == 'exit':
             pool_method_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
         elif action['type'] == 'external_price_update':
-            update_fee(token_symbol='', fee=Decimal('0'), pool=current_state['pool'])
-            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'], 'pool_update': current_state['pool']}
+            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'], 'pool_update': None}
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
         return {'pool_update': pool_method_params, 'change_datetime_update': timestamp, 'action_type': action['type']}
