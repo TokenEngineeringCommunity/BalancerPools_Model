@@ -12,21 +12,11 @@ from model.parts.balancer_math import BalancerMath
 
 import pandas as pd
 
-from model.parts.pool_method_entities import JoinParamsInput, JoinParamsOutput, PoolMethodParamsDecoder, JoinSwapExternAmountInInput, \
-    JoinSwapExternAmountInOutput, SwapExactAmountInInput, SwapExactAmountInOutput, SwapExactAmountOutInput, SwapExactAmountOutOutput, ExitPoolInput, \
-    ExitPoolOutput, ExitSwapPoolAmountInInput, ExitSwapPoolAmountInOutput, ExitSwapPoolExternAmountOutInput, ExitSwapPoolExternAmountOutOutput, \
-    JoinSwapPoolAmountOutOutput, JoinSwapPoolAmountOutInput
+
 
 VERBOSE = False
 
 getcontext().prec = 28
-
-def calculate_total_denorm_weight(pool) -> Decimal:
-    total_weight = Decimal('0')
-    for token_symbol in pool['tokens']:
-        if pool['tokens'][token_symbol].bound:
-            total_weight += Decimal(pool['tokens'][token_symbol].denorm_weight)
-    return total_weight
 
 
 class ActionDecodingType(Enum):

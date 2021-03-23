@@ -1,13 +1,27 @@
 from decimal import Decimal
 
 from model.parts.balancer_math import BalancerMath
-from model.parts.pool_method_entities import JoinSwapExternAmountInInput, JoinParamsInput, SwapExactAmountInInput, SwapExactAmountOutInput, ExitPoolInput, ExitSwapPoolAmountInInput, ExitSwapPoolExternAmountOutInput
+from model.parts.pool_method_entities import JoinParamsInput, JoinParamsOutput, PoolMethodParamsDecoder, JoinSwapExternAmountInInput, JoinSwapExternAmountInOutput, SwapExactAmountInInput, SwapExactAmountInOutput, SwapExactAmountOutInput, SwapExactAmountOutOutput, ExitPoolInput, ExitPoolOutput, ExitSwapPoolAmountInInput, ExitSwapPoolAmountInOutput, ExitSwapPoolExternAmountOutInput, ExitSwapPoolExternAmountOutOutput, JoinSwapPoolAmountOutOutput, JoinSwapPoolAmountOutInput
 
+VERBOSE = False
 
+pool_operation_mappings = {
+    JoinSwapExternAmountInInput: s_join_swap_extern_amount_in,
+    JoinParamsInput: s_join_pool,
+    SwapExactAmountInInput: s_swap_exact_amount_in,
+    SwapExactAmountOutInput: s_swap_exact_amount_out,
+    ExitPoolInput: s_exit_pool,
+    ExitSwapPoolAmountInInput: s_exit_swap_pool_amount_in,
+    ExitSwapPoolExternAmountOutInput: s_exit_swap_extern_amount_out
+
+}
 def s_update_pool(params, substep, state_history, previous_state, policy_input):
     pool = policy_input.get('pool_update')
     if pool is None:
         return 'pool', previous_state['pool']
+
+    pool_operation_suf = pool_operation_mappings[type(pool[0])]
+    pool = pool_operation_suf(params, substep, state_history, previous_state, pool[0], pool[1])
     return 'pool', pool
 
 
@@ -55,6 +69,13 @@ def update_fee(token_symbol: str, fee: Decimal, pool: dict) -> typing.Dict:
             generated_fees[token] = Decimal('0')
 
     return generated_fees
+
+def calculate_total_denorm_weight(pool) -> Decimal:
+    total_weight = Decimal('0')
+    for token_symbol in pool['tokens']:
+        if pool['tokens'][token_symbol].bound:
+            total_weight += Decimal(pool['tokens'][token_symbol].denorm_weight)
+    return total_weight
 
 def s_swap_exact_amount_in(params, step, history, current_state, input_params: SwapExactAmountInInput,
                            output_params: SwapExactAmountInOutput) -> dict:
