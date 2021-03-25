@@ -6,10 +6,8 @@ from enum import Enum
 import pandas as pd
 from attr import dataclass
 
-from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
-                                            MAX_OUT_RATIO)
 from model.parts.balancer_math import BalancerMath
-
+from model.parts.pool_method_entities import PoolMethodParamsDecoder
 import pandas as pd
 
 
@@ -128,4 +126,4 @@ class ActionDecoder:
         elif ActionDecoder.decoding_type == ActionDecodingType.replay_output:
             return ActionDecoder.p_plot_output_action_decoder(idx, params, step, history, current_state)
         else:
-            raise Exception(f'unknwon decoding type {decoding_type}')
+            raise Exception(f'unknown decoding type {decoding_type}')
