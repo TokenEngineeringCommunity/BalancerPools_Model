@@ -1,18 +1,34 @@
 from decimal import Decimal
+
 from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
                                             MAX_OUT_RATIO)
 from model.parts.balancer_math import BalancerMath
-from model.parts.pool_method_entities import JoinParamsInput, JoinParamsOutput, PoolMethodParamsDecoder, JoinSwapExternAmountInInput, JoinSwapExternAmountInOutput, SwapExactAmountInInput, SwapExactAmountInOutput, SwapExactAmountOutInput, SwapExactAmountOutOutput, ExitPoolInput, ExitPoolOutput, ExitSwapPoolAmountInInput, ExitSwapPoolAmountInOutput, ExitSwapPoolExternAmountOutInput, ExitSwapPoolExternAmountOutOutput, JoinSwapPoolAmountOutOutput, JoinSwapPoolAmountOutInput
+from model.parts.pool_method_entities import (
+    ExitPoolInput, ExitPoolOutput, ExitSwapPoolAmountInInput,
+    ExitSwapPoolAmountInOutput, ExitSwapPoolExternAmountOutInput,
+    ExitSwapPoolExternAmountOutOutput, JoinParamsInput, JoinParamsOutput,
+    JoinSwapExternAmountInInput, JoinSwapExternAmountInOutput,
+    JoinSwapPoolAmountOutInput, JoinSwapPoolAmountOutOutput,
+    PoolMethodParamsDecoder, SwapExactAmountInInput, SwapExactAmountInOutput,
+    SwapExactAmountOutInput, SwapExactAmountOutOutput)
+from model.parts.system_policies import ActionDecodingType
+from model.parts.utils import get_param
 
 VERBOSE = False
 
 def s_update_pool(params, substep, state_history, previous_state, policy_input):
     pool = policy_input.get('pool_update')
+    # Here the contents of pool should be e.g. (SwapExactAmountInInput, SwapExactAmountInOutput)
     if pool is None:
         # This means there is no change to the pool. Return the pool but with 0 generated fees.
         return s_pool_update_fee(previous_state['pool'], {})
 
-    pool_operation_suf = pool_operation_mappings[type(pool[0])]
+    decoding_type = get_param(params, "decoding_type")
+    if decoding_type == ActionDecodingType.replay_output:
+        pool_operation_suf = pool_replay_output_mappings[type(pool[0])]
+    else:
+        pool_operation_suf = pool_operation_mappings[type(pool[0])]
+
     pool = pool_operation_suf(params, substep, state_history, previous_state, pool[0], pool[1])
     return 'pool', pool
 
@@ -414,4 +430,12 @@ pool_operation_mappings = {
     ExitPoolInput: s_exit_pool,
     ExitSwapPoolAmountInInput: s_exit_swap_pool_amount_in,
     ExitSwapPoolExternAmountOutInput: s_exit_swap_extern_amount_out
+}
+
+pool_replay_output_mappings = {
+    JoinSwapExternAmountInInput: s_join_swap_plot_output,
+    JoinParamsInput: s_join_pool_plot_output,
+    SwapExactAmountInInput: s_swap_plot_output,
+    ExitPoolInput: s_exit_pool_plot_output,
+    ExitSwapPoolAmountInInput: s_exit_swap_plot_output,
 }

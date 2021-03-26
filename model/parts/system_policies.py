@@ -8,6 +8,7 @@ from attr import dataclass
 
 from model.parts.balancer_math import BalancerMath
 from model.parts.pool_method_entities import PoolMethodParamsDecoder
+from model.parts.utils import get_param
 import pandas as pd
 
 
@@ -109,13 +110,7 @@ class ActionDecoder:
         '''
         In this simplified model of Balancer, we have not modeled user behavior. Instead, we map events to actions.
         '''
-        # When only 1 param this happens
-        if isinstance(params, list):
-            # 1 param
-            decoding_type = params[0]['decoding_type']
-        else:
-            # Parameter sweep
-            decoding_type = params['decoding_type']
+        decoding_type = get_param(params, 'decoding_type')
 
         ActionDecoder.decoding_type = ActionDecodingType(decoding_type)
         idx = current_state['timestep'] + 1
