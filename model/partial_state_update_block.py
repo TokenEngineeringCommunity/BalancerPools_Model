@@ -9,7 +9,6 @@ def generate_partial_state_update_blocks(path_to_action_json: str) -> dict:
     return {
         'partial_state_update_blocks': [
             {
-                # system_policies.py
                 'policies': {
                     'user_action': ActionDecoder.p_action_decoder,
                 },
@@ -18,6 +17,11 @@ def generate_partial_state_update_blocks(path_to_action_json: str) -> dict:
                     'change_datetime': s_update_change_datetime,
                     'token_prices': s_update_external_price_feeds,
                     'action_type': s_update_action_type,
+                }
+            },
+            {
+                'policies': {},
+                'variables': {
                     'spot_prices': s_update_spot_prices,
                 }
             },
