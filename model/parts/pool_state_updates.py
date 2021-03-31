@@ -70,8 +70,7 @@ def s_update_spot_prices(params, substep, state_history, previous_state, policy_
 
 def s_pool_update_fee(pool, fees_per_token = dict()):
     for token in pool['generated_fees']:
-        pool[token] = fees_per_token.get(token, Decimal('0'))
-
+        pool['generated_fees'][token] = fees_per_token.get(token, Decimal('0'))
     return "pool", pool
 
 
