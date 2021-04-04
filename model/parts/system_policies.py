@@ -21,6 +21,7 @@ class ActionDecodingType(Enum):
     simplified = "SIMPLIFIED"
     contract_call = "CONTRACT_CALL"
     replay_output = "REPLAY_OUTPUT"
+    prices_only = "PRICES_ONLY"
 
 
 class ActionDecoder:
@@ -28,8 +29,9 @@ class ActionDecoder:
     decoding_type = ActionDecodingType.simplified
 
     @classmethod
-    def load_actions(cls, path_to_action_file: str) -> int:
+    def load_actions(cls, path_to_action_file: str, only_prices = False) -> int:
         ActionDecoder.action_df = pd.read_json(path_to_action_file).drop(0)
+
         return len(ActionDecoder.action_df)
 
     @staticmethod
@@ -104,6 +106,15 @@ class ActionDecoder:
         return {'pool_update': pool_method_params, 'change_datetime_update': timestamp, 'action_type': action['type']}
 
     @staticmethod
+    def p_action_decoder_prices_only(idx, params, step, history, current_state):
+        action = ActionDecoder.action_df['action'][idx]
+        timestamp = ActionDecoder.action_df['timestamp'][idx]
+        if action['type'] == 'external_price_update':
+            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
+                    'pool_update': None}
+
+
+    @staticmethod
     def p_action_decoder(params, step, history, current_state):
         if ActionDecoder.action_df is None:
             raise Exception('call ActionDecoder.load_actions(path_to_action.json) first')
@@ -120,5 +131,7 @@ class ActionDecoder:
             return ActionDecoder.p_contract_call_action_decoder(idx, params, step, history, current_state)
         elif ActionDecoder.decoding_type == ActionDecodingType.replay_output:
             return ActionDecoder.p_plot_output_action_decoder(idx, params, step, history, current_state)
+        elif ActionDecoder.decoding_type == ActionDecodingType.prices_only:
+            return ActionDecoder.p_action_decoder_prices_only(idx, params, step, history, current_state)
         else:
             raise Exception(f'unknown decoding type {decoding_type}')

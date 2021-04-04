@@ -1,7 +1,8 @@
 from decimal import Decimal
 
+from model.models import Token
 from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
-                                            MAX_OUT_RATIO)
+                                            MAX_OUT_RATIO, MAX_BOUND_TOKENS, MIN_BALANCE, MIN_WEIGHT, MAX_WEIGHT, MAX_TOTAL_WEIGHT)
 from model.parts.balancer_math import BalancerMath
 from model.parts.pool_method_entities import (
     ExitPoolInput, ExitPoolOutput, ExitSwapPoolAmountInInput,
@@ -15,6 +16,7 @@ from model.parts.system_policies import ActionDecodingType
 from model.parts.utils import get_param
 
 VERBOSE = False
+
 
 def s_update_pool(params, substep, state_history, previous_state, policy_input):
     pool = policy_input.get('pool_update')
@@ -35,21 +37,29 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
 
 def calculate_spot_prices(pool: dict, ref_token: str):
     swap_fee = pool['swap_fee']
-    balance_in = pool['tokens'][ref_token].balance
-    weight_in = pool['tokens'][ref_token].weight
+    ref_tokens = []
+    if ref_token is None:
+        ref_tokens = list(pool['tokens'].keys())
+    else:
+        ref_tokens.append(ref_token)
     spot_prices = {}
-    for token in pool['tokens']:
-        if token == ref_token:
-            continue
-        balance_out = pool['tokens'][token].balance
-        weight_out = pool['tokens'][token].weight
+    for ref in ref_tokens:
+        spot_prices[ref] = {}
+        balance_in = pool['tokens'][ref].balance
+        denorm_weight_in = pool['tokens'][ref].denorm_weight
 
-        price = BalancerMath.calc_spot_price(token_balance_in=Decimal(balance_in),
-                                             token_weight_in=Decimal(weight_in),
-                                             token_balance_out=Decimal(balance_out),
-                                             token_weight_out=Decimal(weight_out),
-                                             swap_fee=Decimal(swap_fee))
-        spot_prices[token] = price
+        for token in pool['tokens']:
+            if token == ref:
+                continue
+            balance_out = pool['tokens'][token].balance
+            denorm_weight_out = pool['tokens'][token].denorm_weight
+
+            price = BalancerMath.calc_spot_price(token_balance_in=Decimal(balance_in),
+                                                 token_weight_in=Decimal(denorm_weight_in),
+                                                 token_balance_out=Decimal(balance_out),
+                                                 token_weight_out=Decimal(denorm_weight_out),
+                                                 swap_fee=Decimal(swap_fee))
+            spot_prices[ref][token] = price
     return spot_prices
 
 
@@ -57,18 +67,17 @@ def s_update_spot_prices(params, substep, state_history, previous_state, policy_
     pool = previous_state["pool"]
 
     if isinstance(params, list):
-        # 1 param
-        ref_token = params[0]['spot_price_reference']
+        # 1 param or none
+        ref_token = params[0].get('spot_price_reference')
     else:
         # Parameter sweep
         ref_token = params['spot_price_reference']
-
 
     spot_prices = calculate_spot_prices(pool, ref_token)
     return 'spot_prices', spot_prices
 
 
-def s_pool_update_fee(pool, fees_per_token = dict()):
+def s_pool_update_fee(pool, fees_per_token=dict()):
     for token in pool['generated_fees']:
         pool[token] = fees_per_token.get(token, Decimal('0'))
 
@@ -421,6 +430,74 @@ def s_exit_pool_plot_output(params, step, history, current_state, input_params, 
         pool['tokens'][token.symbol].balance -= token.amount
 
     return pool
+
+
+def calculate_normal_weight(pool, token_symbol: str):
+    denorm_weight = pool['tokens'][token_symbol].denorm_weight
+    return denorm_weight / calculate_total_denorm_weight(pool)
+
+def bind(pool, token_symbol: str, token: Token) -> Decimal:
+    pool_tokens = pool['tokens']
+    if pool_tokens.get(token_symbol) is not None and pool_tokens.get(token_symbol).bound is True:
+        raise Exception('ERR_IS_BOUND')
+    # TODO limit number of tokens to MAX_BOUND_TOKENS
+    if len(list(pool_tokens.keys())) >= MAX_BOUND_TOKENS:
+        raise Exception("ERR_MAX_TOKENS")
+    pool_tokens[token_symbol] = Token(weight=Decimal('0'), denorm_weight=Decimal('0'), balance=Decimal('0'), bound=True)
+    return rebind(pool, token_symbol, token)
+
+
+def rebind(pool: dict, token_symbol: str, token: Token) -> Decimal:
+    pool_tokens = pool['tokens']
+    if pool_tokens.get(token_symbol) is None or pool_tokens.get(token_symbol).bound is False:
+        raise Exception("ERR_NOT_BOUND")
+    if token.denorm_weight < MIN_WEIGHT:
+        raise Exception("ERR_MIN_WEIGHT")
+    if token.denorm_weight > MAX_WEIGHT:
+        raise Exception("ERR_MAX_WEIGHT")
+    if token.balance < MIN_BALANCE:
+        raise Exception("ERR_MIN_BALANCE")
+    old_weight = pool_tokens[token_symbol].denorm_weight
+    total_denorm_weight = calculate_total_denorm_weight(pool)
+    print('total_denorm', total_denorm_weight)
+    if token.denorm_weight > old_weight:
+        total_denorm_weight = total_denorm_weight + (token.denorm_weight - old_weight)
+        print('total_denorm >', total_denorm_weight)
+        if total_denorm_weight > MAX_TOTAL_WEIGHT:
+            raise Exception("ERR_MAX_TOTAL_WEIGHT")
+    elif token.denorm_weight < old_weight:
+        total_denorm_weight = total_denorm_weight + (old_weight - token.denorm_weight)
+        print('total_denorm <', total_denorm_weight)
+    pool_tokens[token_symbol].denorm_weight = token.denorm_weight
+    old_balance = pool_tokens[token_symbol].balance
+    pool_tokens[token_symbol].balance = token.balance
+    for ts in pool_tokens.keys():
+        if total_denorm_weight == Decimal('0'):
+            pool_tokens[ts].weight = 1.0
+        else:
+            pool_tokens[ts].weight = pool_tokens[ts].denorm_weight / total_denorm_weight
+    if token.balance > old_balance:
+        return - (token.balance - old_balance)
+    elif token.balance < old_balance:
+        # In this case liquidity is being withdrawn, so charge EXIT_FEE
+        token_balance_withdrawn = old_balance - token.balance
+        # token_exit_fee = token_balance_withdrawn * EXIT_FEE
+        # self.factory_fees += token_exit_fee
+        return token_balance_withdrawn  # - token_exit_fee
+
+
+def create_pool(token_symbols: [str], tokens: [Token], swap_fee: Decimal, pool_shares: Decimal) -> dict:
+    pool = {
+        "tokens": {},
+        "swap_fee": swap_fee,
+        "pool_shares": pool_shares,
+        "generated_fees": {}
+    }
+    for idx, token_symbol in enumerate(token_symbols):
+        pool['generated_fees'][token_symbol] = Decimal('0')
+        bind(pool, token_symbol, tokens[idx])
+    return pool
+
 
 pool_operation_mappings = {
     JoinSwapExternAmountInInput: s_join_swap_extern_amount_in,
