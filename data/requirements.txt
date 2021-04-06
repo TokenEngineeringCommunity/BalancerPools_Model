@@ -61,6 +61,7 @@ parsimonious==0.8.1
 parso==0.8.1
 pexpect==4.8.0
 pickleshare==0.7.5
+plotly==4.14.3
 prompt-toolkit==3.0.16
 proto-plus==1.14.2
 protobuf==3.15.5
