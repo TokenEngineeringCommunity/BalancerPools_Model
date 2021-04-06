@@ -79,9 +79,14 @@ def stage4_add_prices_to_initialstate_and_actions(pool_address: str, fiat_symbol
             return action
         actions = list(map(convert_to_iso_str, actions))
 
-        # Remove prices before pool creation. First action must be pool creation
-        while actions[0]['action']['type'] != 'pool_creation':
-            actions.pop(0)
+        # First action must be pool creation. Remove any prices before that.
+        # If we are in pricesonly mode, there will be an IndexError because actions
+        # is an empty list.
+        try:
+            while actions[0]['action']['type'] != 'pool_creation':
+                actions.pop(0)
+        except IndexError:
+            pass
 
         return actions
 
