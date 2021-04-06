@@ -374,15 +374,19 @@ def produce_actions():
 
     # save_pickle(actions, f"{args.pool_address}/actions.pickle")
     # actions = load_pickle(f"{args.pool_address}/actions.pickle")
-
+    initial_states_suffix = '-initial_pool_states-prices.json'
+    action_suffix = '-actions-prices.json'
+    if args.pricesonly:
+        initial_states_suffix = '-initial_pool_states-prices-only.json'
+        action_suffix = '-actions-prices-only.json'
     if args.price_provider == "tradingview":
         initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, args.fiat, initial_state, actions)
-        save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json')
-        save_json(actions_w_prices, f'{args.pool_address}-actions-prices.json')
+        save_json(initial_state_w_prices, f'{args.pool_address}{initial_states_suffix}')
+        save_json(actions_w_prices, f'{args.pool_address}{action_suffix}')
     elif args.price_provider == "coingecko":
         initial_state_w_prices, actions = add_prices_from_coingecko(initial_state, actions, args.pool_address, args.fiat)
-        save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json', default=json_serialize_datetime)
-        save_json(actions, f'{args.pool_address}-actions-prices.json', default=json_serialize_datetime)
+        save_json(initial_state_w_prices, f'{args.pool_address}{initial_states_suffix}', default=json_serialize_datetime)
+        save_json(actions, f'{args.pool_address}{action_suffix}', default=json_serialize_datetime)
     else:
         raise Exception("Wait a minute, {} is not a valid price provider".format(args.price_provider))
 
