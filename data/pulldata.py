@@ -6,11 +6,13 @@ import time
 import typing
 from datetime import datetime
 from decimal import Decimal
+from collections import defaultdict
 
 import dateutil
 import pandas as pd
 from google.cloud import bigquery
 from web3 import Web3
+from ipdb import launch_ipdb_on_exception
 
 from action import Action
 from coingecko import add_prices_from_coingecko
@@ -24,6 +26,7 @@ parser = argparse.ArgumentParser(prog="pulldata",
 parser.add_argument("pool_address")
 parser.add_argument("price_provider", help="Can be either tradingview or coingecko. Tradingview requires the CSVs to already be in the pool_address subdirectory.")
 parser.add_argument("--fiat", "-f", default="USD")
+parser.add_argument("--pricesonly", action="store_true")
 args = parser.parse_args()
 w3 = Web3(Web3.HTTPProvider(os.environ['NODE_URL']))
 erc20_info_getter = ERC20InfoReader(w3)
@@ -331,42 +334,43 @@ def produce_actions():
     initial_state = stage2_produce_initial_state(new_events, fees_results, transfer_events)
 
     # save_pickle(initial_state, f"{args.pool_address}/initial_state.pickle")
+    if not args.pricesonly:
+        events = []
+        events.extend(turn_events_into_actions(new_events, fees_dict, denorms_results))
+        events.extend(turn_events_into_actions(join_events, fees_dict, denorms_results))
+        events.extend(turn_events_into_actions(swap_events, fees_dict, denorms_results))
+        events.extend(turn_events_into_actions(exit_events, fees_dict, denorms_results))
+        events.extend(turn_events_into_actions(transfer_events, fees_dict, denorms_results))
 
-    events = []
-    events.extend(turn_events_into_actions(new_events, fees_dict, denorms_results))
-    events.extend(turn_events_into_actions(join_events, fees_dict, denorms_results))
-    events.extend(turn_events_into_actions(swap_events, fees_dict, denorms_results))
-    events.extend(turn_events_into_actions(exit_events, fees_dict, denorms_results))
-    events.extend(turn_events_into_actions(transfer_events, fees_dict, denorms_results))
+        # save_pickle(events, f"{args.pool_address}/events.pickle")
+        # events = load_pickle(f"{args.pool_address}/events.pickle")
 
-    # save_pickle(events, f"{args.pool_address}/events.pickle")
-    # events = load_pickle(f"{args.pool_address}/events.pickle")
+        events_grouped_by_txhash = {}
+        for i, action in enumerate(events):
+            tx_hash = events[i].tx_hash
+            if events_grouped_by_txhash.get(tx_hash) is None:
+                events_grouped_by_txhash[tx_hash] = []
+            events_grouped_by_txhash[tx_hash].append(action)
+        # save_pickle(events_grouped_by_txhash, f'{args.pool_address}/events_grouped_by_txhash.pickle')
+        # events_grouped_by_txhash = load_pickle(f'{args.pool_address}/events_grouped_by_txhash.pickle')
 
-    events_grouped_by_txhash = {}
-    for i, action in enumerate(events):
-        tx_hash = events[i].tx_hash
-        if events_grouped_by_txhash.get(tx_hash) is None:
-            events_grouped_by_txhash[tx_hash] = []
-        events_grouped_by_txhash[tx_hash].append(action)
-    # save_pickle(events_grouped_by_txhash, f'{args.pool_address}/events_grouped_by_txhash.pickle')
-    # events_grouped_by_txhash = load_pickle(f'{args.pool_address}/events_grouped_by_txhash.pickle')
+        def turn_grouped_by_txhash_events_into_list_and_ungroup_1inch_aggregated_swaps():
+            answer = []
+            def is_swap(actions):
+                return all([a.action_type == "swap" for a in actions])
+            for k, group in events_grouped_by_txhash.items():
+                if len(group) > 1 and is_swap(group):
+                    for i in group: answer.append([i])
+                else:
+                    answer.append(group)
+            return answer
+        grouped_events = turn_grouped_by_txhash_events_into_list_and_ungroup_1inch_aggregated_swaps()
 
-    def turn_grouped_by_txhash_events_into_list_and_ungroup_1inch_aggregated_swaps():
-        answer = []
-        def is_swap(actions):
-            return all([a.action_type == "swap" for a in actions])
-        for k, group in events_grouped_by_txhash.items():
-            if len(group) > 1 and is_swap(group):
-                for i in group: answer.append([i])
-            else:
-                answer.append(group)
-        return answer
-    grouped_events = turn_grouped_by_txhash_events_into_list_and_ungroup_1inch_aggregated_swaps()
-
-    # Remove pool share transfers
-    grouped_events = list(filter(lambda acts: not (len(acts) == 1 and acts[0].action_type == 'transfer'), grouped_events))
-
-    actions = stage3_merge_actions(args.pool_address, grouped_events)
+        # Remove pool share transfers
+        grouped_events = list(filter(lambda acts: not (len(acts) == 1 and acts[0].action_type == 'transfer'), grouped_events))
+        actions = stage3_merge_actions(args.pool_address, grouped_events)
+    else:
+        actions = []
 
     # save_pickle(actions, f"{args.pool_address}/actions.pickle")
     # actions = load_pickle(f"{args.pool_address}/actions.pickle")
@@ -382,8 +386,6 @@ def produce_actions():
     else:
         raise Exception("Wait a minute, {} is not a valid price provider".format(args.price_provider))
 
-
-from ipdb import launch_ipdb_on_exception
 
 with launch_ipdb_on_exception():
     produce_actions()
