@@ -4,7 +4,7 @@ cachetools==4.2.1
 certifi==2020.12.5
 cffi==1.14.4
 chardet==4.0.0
-cryptography==3.3.1
+cryptography>=3.3.2
 dacktool==0.0.7
 dbstream==0.0.30
 google-api-core==1.25.1
@@ -20,7 +20,7 @@ google-resumable-media==1.2.0
 googleapis-common-protos==1.52.0
 googleauthentication==0.0.14
 grpcio==1.35.0
-httplib2==0.18.1
+httplib2>=0.19.0
 idna==2.10
 libcst==0.3.16
 marshmallow==3.10.0
@@ -50,4 +50,4 @@ stringcase==1.2.0
 typing-extensions==3.7.4.3
 typing-inspect==0.6.0
 uritemplate==3.0.1
-urllib3==1.26.3
+urllib3>=1.26.4
