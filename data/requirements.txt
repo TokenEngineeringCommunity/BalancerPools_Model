@@ -50,4 +50,4 @@ stringcase==1.2.0
 typing-extensions==3.7.4.3
 typing-inspect==0.6.0
 uritemplate==3.0.1
-urllib3==1.26.3
+urllib3==1.26.4
