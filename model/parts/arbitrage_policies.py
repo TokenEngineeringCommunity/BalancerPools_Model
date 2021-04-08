@@ -1,6 +1,9 @@
+from datetime import timedelta
+import pandas as pd
 from decimal import Context, Decimal, MAX_EMAX
 from operator import attrgetter
 
+import dateutil
 from attr import dataclass
 from model.parts.balancer_math import BalancerMath
 from model.parts.pool_method_entities import SwapExactAmountInInput, SwapExactAmountInOutput, TokenAmount
@@ -102,13 +105,15 @@ def p_arbitrageur(params, step, history, current_state):
           amount=Decimal('0')
         ))
         swap_output = SwapExactAmountInOutput(token_out=TokenAmount(amount=most_profitable_trade.token_amount_out, symbol=token_out))
+        # add 15 seconds, more or less next block
+        action_datetime = dateutil.parser.isoparse(current_state['change_datetime']) + timedelta(0, 15)
         return {
             'pool_update': (swap_input, swap_output),
-            'change_datetime_update': None,
-            'action_type': 'arbitrage_swap_exact_amount_in',
-            'external_price_update': None
+            'change_datetime_update': pd.Timestamp(action_datetime.isoformat()),
+            'action_type': 'swap',
+            # 'external_price_update': None,
             }
-
+    print('no trade')
     return {'external_price_update': None, 'change_datetime_update': None, 'action_type': None,
                     'pool_update': None}
 

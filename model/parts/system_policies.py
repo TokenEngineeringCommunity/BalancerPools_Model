@@ -11,9 +11,6 @@ from model.parts.pool_method_entities import PoolMethodParamsDecoder
 from model.parts.utils import get_param
 import pandas as pd
 
-
-
-
 getcontext().prec = 28
 
 
@@ -21,7 +18,6 @@ class ActionDecodingType(Enum):
     simplified = "SIMPLIFIED"
     contract_call = "CONTRACT_CALL"
     replay_output = "REPLAY_OUTPUT"
-    prices_only = "PRICES_ONLY"
 
 
 class ActionDecoder:
@@ -29,7 +25,7 @@ class ActionDecoder:
     decoding_type = ActionDecodingType.simplified
 
     @classmethod
-    def load_actions(cls, path_to_action_file: str, only_prices = False) -> int:
+    def load_actions(cls, path_to_action_file: str, only_prices=False) -> int:
         ActionDecoder.action_df = pd.read_json(path_to_action_file).drop(0)
 
         return len(ActionDecoder.action_df)
@@ -38,7 +34,6 @@ class ActionDecoder:
     def p_simplified_action_decoder(idx, params, step, history, current_state):
         action = ActionDecoder.action_df['action'][idx]
         timestamp = ActionDecoder.action_df['timestamp'][idx]
-        tx_hash = ActionDecoder.action_df['tx_hash'][idx]
         if action['type'] == 'swap':
             pool_method_params = PoolMethodParamsDecoder.swap_exact_amount_in_simplified(action)
         elif action['type'] == 'join':
@@ -51,7 +46,8 @@ class ActionDecoder:
             pool_method_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
         elif action['type'] == 'external_price_update':
             return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
-                    'pool_update': None}
+                    # 'pool_update': None
+                    }
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
         return {'pool_update': pool_method_params, 'change_datetime_update': timestamp, 'action_type': action['type']}
@@ -60,13 +56,13 @@ class ActionDecoder:
     def p_contract_call_action_decoder(idx, params, step, history, current_state):
         action = ActionDecoder.action_df['action'][idx]
         timestamp = ActionDecoder.action_df['timestamp'][idx]
-        tx_hash = ActionDecoder.action_df['tx_hash'][idx]
         contract_call = None
         if action['type'] != 'external_price_update':
             contract_call = ActionDecoder.action_df['contract_call'][idx][0]
         else:
             return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
-                    'pool_update': None}
+                    # 'pool_update': None
+                    }
         if contract_call['type'] == 'joinswapExternAmountIn':
             pool_method_params = PoolMethodParamsDecoder.join_swap_extern_amount_in_contract_call(action, contract_call)
         elif contract_call['type'] == 'joinPool':
@@ -100,19 +96,11 @@ class ActionDecoder:
         elif action['type'] == 'exit':
             pool_method_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
         elif action['type'] == 'external_price_update':
-            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'], 'pool_update': None}
+            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
+                    'pool_update': None}
         else:
             raise Exception("Action type {} unimplemented".format(action['type']))
         return {'pool_update': pool_method_params, 'change_datetime_update': timestamp, 'action_type': action['type']}
-
-    @staticmethod
-    def p_action_decoder_prices_only(idx, params, step, history, current_state):
-        action = ActionDecoder.action_df['action'][idx]
-        timestamp = ActionDecoder.action_df['timestamp'][idx]
-        if action['type'] == 'external_price_update':
-            return {'external_price_update': action['tokens'], 'change_datetime_update': timestamp, 'action_type': action['type'],
-                    'pool_update': None}
-
 
     @staticmethod
     def p_action_decoder(params, step, history, current_state):
@@ -131,7 +119,5 @@ class ActionDecoder:
             return ActionDecoder.p_contract_call_action_decoder(idx, params, step, history, current_state)
         elif ActionDecoder.decoding_type == ActionDecodingType.replay_output:
             return ActionDecoder.p_plot_output_action_decoder(idx, params, step, history, current_state)
-        elif ActionDecoder.decoding_type == ActionDecodingType.prices_only:
-            return ActionDecoder.p_action_decoder_prices_only(idx, params, step, history, current_state)
         else:
             raise Exception(f'unknown decoding type {decoding_type}')
