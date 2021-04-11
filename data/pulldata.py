@@ -368,23 +368,27 @@ def produce_actions():
 
         # Remove pool share transfers
         grouped_events = list(filter(lambda acts: not (len(acts) == 1 and acts[0].action_type == 'transfer'), grouped_events))
+
         actions = stage3_merge_actions(args.pool_address, grouped_events)
+        initial_state_filename = f'{args.pool_address}-initial_pool_states-prices.json'
+        actions_filename = f'{args.pool_address}-actions-prices.json'
     else:
         actions = []
+        initial_state_filename = f'{args.pool_address}-initial_pool_states-prices.json'
+        actions_filename = f'{args.pool_address}-prices.json'
 
     # save_pickle(actions, f"{args.pool_address}/actions.pickle")
     # actions = load_pickle(f"{args.pool_address}/actions.pickle")
 
     if args.price_provider == "tradingview":
         initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, args.fiat, initial_state, actions)
-        save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json')
-        save_json(actions_w_prices, f'{args.pool_address}-actions-prices.json')
     elif args.price_provider == "coingecko":
         initial_state_w_prices, actions = add_prices_from_coingecko(initial_state, actions, args.pool_address, args.fiat)
-        save_json(initial_state_w_prices, f'{args.pool_address}-initial_pool_states-prices.json', default=json_serialize_datetime)
-        save_json(actions, f'{args.pool_address}-actions-prices.json', default=json_serialize_datetime)
     else:
+
         raise Exception("Wait a minute, {} is not a valid price provider".format(args.price_provider))
+    save_json(initial_state_w_prices, initial_state_filename, default=json_serialize_datetime)
+    save_json(actions, actions_filename, default=json_serialize_datetime)
 
 
 with launch_ipdb_on_exception():
