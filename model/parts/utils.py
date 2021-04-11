@@ -1,6 +1,31 @@
 import pandas as pd
 import typing
 
+def get_bound_tokens(pool: typing.Dict):
+    return [token_symbol for token_symbol in pool['tokens'] if pool['tokens'][token_symbol].bound]
+
+def get_balances(pool: typing.Dict):
+    """
+    INPUT: "pool": {"tokens": {"DAI": {"weight": "0.2", "denorm_weight": "10",
+        "balance": "10000000", "bound": true
+            },
+            "WETH": {
+                "weight": "0.8",
+                "denorm_weight": "40",
+                "balance": "67738.636173102396002749",
+                "bound": true
+            }
+        },
+
+    OUTPUT: {'DAI': Decimal('10011861.328308360999600128'), 'WETH':
+    Decimal('67718.61443839753075637013346')}
+    """
+    tokens = get_bound_tokens(pool)
+    ans = {}
+    for t in tokens:
+        ans[t] = pool['tokens'][t].balance
+    return ans
+
 def get_param(params: typing.Dict, key: str):
     # When only 1 param this happens
     if isinstance(params, list):

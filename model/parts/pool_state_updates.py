@@ -12,7 +12,7 @@ from model.parts.pool_method_entities import (
     PoolMethodParamsDecoder, SwapExactAmountInInput, SwapExactAmountInOutput,
     SwapExactAmountOutInput, SwapExactAmountOutOutput)
 from model.parts.system_policies import ActionDecodingType
-from model.parts.utils import get_param
+from model.parts.utils import get_param, get_balances
 
 VERBOSE = False
 
@@ -24,14 +24,33 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
         return s_pool_update_fee(previous_state['pool'], {})
 
     decoding_type = get_param(params, "decoding_type")
+    weight_change_factor = get_param(params, "weight_change_factor")
     if decoding_type == ActionDecodingType.replay_output:
         pool_operation_suf = pool_replay_output_mappings[type(pool[0])]
     else:
         pool_operation_suf = pool_operation_mappings[type(pool[0])]
+        pool_operation_suf = powerpool_linear_weight_change(pool_operation_suf, weight_change_factor)
 
     pool = pool_operation_suf(params, substep, state_history, previous_state, pool[0], pool[1])
     return 'pool', pool
 
+def powerpool_linear_weight_change(state_update_function, weight_change_factor):
+    def wrapped_state_update_function(*args, **kwargs):
+        current_pool = args[3]['pool']
+        balances_old = get_balances(current_pool)
+        updated_pool = state_update_function(*args, **kwargs)
+        balances_new = get_balances(updated_pool)
+        print(balances_old, balances_new)
+        for token in balances_old:
+            print(state_update_function)
+            if balances_new[token] > balances_old[token]:
+                updated_pool['tokens'][token].weight *= (1 - weight_change_factor) # e.g. 0.5% becomes 1- 0.005 = 0.995
+                print('Changing weight of {} to {}'.format(token, updated_pool['tokens'][token].weight))
+            elif balances_new[token] < balances_old[token]:
+                updated_pool['tokens'][token].weight *= (1 + weight_change_factor)
+                print('Changing weight of {} to {}'.format(token, updated_pool['tokens'][token].weight))
+        return updated_pool
+    return wrapped_state_update_function
 
 def calculate_spot_prices(pool: dict, ref_token: str):
     swap_fee = pool['swap_fee']
