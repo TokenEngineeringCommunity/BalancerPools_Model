@@ -381,7 +381,7 @@ def produce_actions():
     # actions = load_pickle(f"{args.pool_address}/actions.pickle")
 
     if args.price_provider == "tradingview":
-        initial_state_w_prices, actions_w_prices = stage4_add_prices_to_initialstate_and_actions(args.pool_address, args.fiat, initial_state, actions)
+        initial_state_w_prices, actions = stage4_add_prices_to_initialstate_and_actions(args.pool_address, args.fiat, initial_state, actions)
     elif args.price_provider == "coingecko":
         initial_state_w_prices, actions = add_prices_from_coingecko(initial_state, actions, args.pool_address, args.fiat)
     else:
