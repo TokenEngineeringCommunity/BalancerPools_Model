@@ -4,20 +4,21 @@ import os
 import pickle
 import time
 import typing
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
-from collections import defaultdict
 
 import dateutil
 import pandas as pd
 from google.cloud import bigquery
-from web3 import Web3
 from ipdb import launch_ipdb_on_exception
+from web3 import Web3
 
 from action import Action
 from coingecko import add_prices_from_coingecko
 from tradingview import stage4_add_prices_to_initialstate_and_actions
-from utils import load_json, load_pickle, save_json, save_pickle, json_serialize_datetime
+from utils import (CustomJSONEncoder, load_json, load_pickle, save_json,
+                   save_pickle)
 from w3_utils import (BPoolLogCallParser, ERC20InfoReader,
                       TransactionReceiptGetter)
 
@@ -70,25 +71,26 @@ def get_initial_token_distribution(new_results) -> dict:
         token_address = inputs['token']
         token_symbol = erc20_info_getter.get_token_symbol(token_address)
         denorm = Decimal(inputs['denorm'])
+        balance = Decimal(inputs['balance'])
         total_denorm_weight += denorm
 
         tokens[token_symbol] = {
             'weight': None,
-            'denorm_weight': str(denorm),
-            'balance': inputs['balance'],
+            'denorm_weight': denorm,
+            'balance': balance,
             'bound': True
         }
 
     for (key, token) in tokens.items():
         denorm = Decimal(token['denorm_weight'])
-        token['weight'] = str(denorm / total_denorm_weight)
+        token['weight'] = denorm / total_denorm_weight
     return tokens
 
 
 def get_initial_fees_generated(pool_tokens):
     fees = {}
     for token_symbol in pool_tokens:
-        fees[token_symbol] = '0.0'
+        fees[token_symbol] = 0.0
     return fees
 
 
@@ -267,8 +269,8 @@ def stage2_produce_initial_state(new_results, fees_results, transfer_results) ->
         'pool': {
             'tokens': tokens,
             'generated_fees': generated_fees,
-            'pool_shares': str(pool_shares),
-            'swap_fee': str(swap_fee)
+            'pool_shares': pool_shares,
+            'swap_fee': swap_fee
         },
         'action_type': 'pool_creation',
         'change_datetime': creation_date
@@ -387,8 +389,8 @@ def produce_actions():
     else:
 
         raise Exception("Wait a minute, {} is not a valid price provider".format(args.price_provider))
-    save_json(initial_state_w_prices, initial_state_filename, default=json_serialize_datetime)
-    save_json(actions, actions_filename, default=json_serialize_datetime)
+    save_json(initial_state_w_prices, initial_state_filename, cls=CustomJSONEncoder)
+    save_json(actions, actions_filename, cls=CustomJSONEncoder)
 
 
 with launch_ipdb_on_exception():
