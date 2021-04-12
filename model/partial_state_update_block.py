@@ -21,10 +21,21 @@ def generate_partial_state_update_blocks(path_to_action_json: str, add_arbitrage
                     'spot_prices': s_update_spot_prices,
                 }
             },
+
         ],
         'steps_number': steps_number,
     }
     if add_arbitrage:
-        blocks['partial_state_update_blocks'][0]['policies']['arbitrage'] = p_arbitrageur
+        blocks['partial_state_update_blocks'].append({
+            'policies': {
+                'arbitrage': p_arbitrageur,
+
+            },
+            'variables': {
+                'pool': s_update_pool,
+                'change_datetime': s_update_change_datetime,
+                'spot_prices': s_update_spot_prices,
+            }
+        })
     return blocks
 
