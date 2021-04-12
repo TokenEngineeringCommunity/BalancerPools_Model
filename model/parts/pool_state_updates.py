@@ -17,21 +17,21 @@ from model.parts.utils import get_param, get_balances
 VERBOSE = False
 
 def s_update_pool(params, substep, state_history, previous_state, policy_input):
-    pool = policy_input.get('pool_update')
-    # Here the contents of pool should be e.g. (SwapExactAmountInInput, SwapExactAmountInOutput)
-    if pool is None:
+    pool_opcodes = policy_input.get('pool_update')
+    # Here the contents of pool_opcodes should be e.g. (SwapExactAmountInInput, SwapExactAmountInOutput)
+    if pool_opcodes is None:
         # This means there is no change to the pool. Return the pool but with 0 generated fees.
         return s_pool_update_fee(previous_state['pool'], {})
 
     decoding_type = get_param(params, "decoding_type")
     weight_change_factor = get_param(params, "weight_change_factor")
     if decoding_type == ActionDecodingType.replay_output:
-        pool_operation_suf = pool_replay_output_mappings[type(pool[0])]
+        pool_operation_suf = pool_replay_output_mappings[type(pool_opcodes[0])]
     else:
-        pool_operation_suf = pool_operation_mappings[type(pool[0])]
+        pool_operation_suf = pool_operation_mappings[type(pool_opcodes[0])]
         pool_operation_suf = powerpool_linear_weight_change(pool_operation_suf, weight_change_factor)
 
-    pool = pool_operation_suf(params, substep, state_history, previous_state, pool[0], pool[1])
+    pool = pool_operation_suf(params, substep, state_history, previous_state, pool_opcodes[0], pool_opcodes[1])
     return 'pool', pool
 
 def powerpool_linear_weight_change(state_update_function, weight_change_factor):
