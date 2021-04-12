@@ -11,6 +11,11 @@ from model.models import Token
 
 
 def generate_initial_state(initial_values_json: str, spot_price_base_currency: str) -> typing.Dict:
+    def token_finding_hook(k):
+        if "weight" in k and "denorm_weight" in k and "balance" in k and "bound" in k:
+            return Token(weight=k["weight"], denorm_weight=k["denorm_weight"], balance=Decimal(k["balance"]), bound=k["bound"])
+        return k
+
     with open(initial_values_json, "r") as f:
         initial_values = json.load(f, object_hook=token_finding_hook)
     # Figure out the tokens that are NOT the spot_price_base_currency
@@ -29,9 +34,3 @@ def generate_initial_state(initial_values_json: str, spot_price_base_currency: s
                                                       swap_fee=Decimal(initial_values['pool']['swap_fee']))
     initial_values["spot_prices"] = spot_prices
     return initial_values
-
-
-def token_finding_hook(k):
-    if "weight" in k and "denorm_weight" in k and "balance" in k and "bound" in k:
-        return Token(weight=k["weight"], denorm_weight=k["denorm_weight"], balance=Decimal(k["balance"]), bound=k["bound"])
-    return k
