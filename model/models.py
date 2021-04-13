@@ -2,7 +2,8 @@ import json
 import typing
 from decimal import Decimal
 from model.parts.balancer_math import BalancerMath
-
+from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
+                                            MAX_OUT_RATIO, MAX_BOUND_TOKENS, MIN_BALANCE, MIN_WEIGHT, MAX_WEIGHT, MAX_TOTAL_WEIGHT)
 def ensure_type(value, types):
     if isinstance(value, types):
         return value
@@ -105,6 +106,54 @@ class Pool:
         for t in self.bound_tokens:
             ans[t] = self.tokens[t].balance
         return ans
+
+    def bind(self, token_symbol: str, token: Token) -> Decimal:
+        if self.tokens.get(token_symbol) is not None and self.tokens.get(token_symbol).bound is True:
+            raise Exception('ERR_IS_BOUND')
+        if len(list(self.tokens.keys())) >= MAX_BOUND_TOKENS:
+            raise Exception("ERR_MAX_TOKENS")
+        self.tokens[token_symbol] = Token(weight=Decimal('0'), denorm_weight=Decimal('0'), balance=Decimal('0'), bound=True)
+        return self.rebind(token_symbol, token)
+
+    def rebind(self, token_symbol: str, token: Token) -> Decimal:
+        if self.tokens.get(token_symbol) is None or self.tokens.get(token_symbol).bound is False:
+            raise Exception("ERR_NOT_BOUND")
+        if token.denorm_weight < MIN_WEIGHT:
+            raise Exception("ERR_MIN_WEIGHT")
+        if token.denorm_weight > MAX_WEIGHT:
+            raise Exception("ERR_MAX_WEIGHT")
+        if token.balance < MIN_BALANCE:
+            raise Exception("ERR_MIN_BALANCE")
+        old_weight = self.tokens[token_symbol].denorm_weight
+        print('total_denorm', self.total_denorm_weight)
+        if token.denorm_weight > old_weight:
+            total_denorm_weight_new = self.total_denorm_weight + (token.denorm_weight - old_weight)
+            print('total_denorm >', total_denorm_weight_new)
+            if total_denorm_weight_new > MAX_TOTAL_WEIGHT:
+                raise Exception("ERR_MAX_TOTAL_WEIGHT")
+        elif token.denorm_weight < old_weight:
+            print('total_denorm <', self.total_denorm_weight)
+        self.tokens[token_symbol].denorm_weight = token.denorm_weight
+
+        old_balance = self.tokens[token_symbol].balance
+        self.tokens[token_symbol].balance = token.balance
+        for ts in self.tokens.keys():
+            if self.total_denorm_weight == Decimal('0'):
+                self.tokens[ts].weight = 1.0
+            else:
+                self.tokens[ts].weight = self.tokens[ts].denorm_weight / self.total_denorm_weight
+        if token.balance > old_balance:
+            return - (token.balance - old_balance)
+        elif token.balance < old_balance:
+            token_balance_withdrawn = old_balance - token.balance
+            return token_balance_withdrawn
+
+    def unbind(self, token_symbol: str) -> dict:
+        if self.tokens.get(token_symbol) is None or self.tokens.get(token_symbol).bound is False:
+            raise Exception("ERR_NOT_BOUND")
+
+        token_removed = self.tokens.pop(token_symbol)
+        return {token_symbol: token_removed.balance}
 
     @property
     def shares(self):
