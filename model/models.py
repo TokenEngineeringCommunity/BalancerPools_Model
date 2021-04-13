@@ -72,7 +72,8 @@ class Pool:
             spot_prices[token] = price
         return spot_prices
 
-    def denorm_weight(self):
+    @property
+    def total_denorm_weight(self):
         total_weight = Decimal('0')
         for token_symbol in self.tokens:
             if self.tokens[token_symbol].bound:
