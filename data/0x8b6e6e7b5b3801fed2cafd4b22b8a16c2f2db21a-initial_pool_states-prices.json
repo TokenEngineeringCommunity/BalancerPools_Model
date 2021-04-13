@@ -1,5 +1,6 @@
 {
 	"pool": {
+		"__type__": "Pool",
 		"tokens": {
 			"DAI": {
 				"weight": 0.2,
