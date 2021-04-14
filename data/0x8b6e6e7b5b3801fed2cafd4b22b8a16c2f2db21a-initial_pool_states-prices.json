@@ -3,15 +3,15 @@
 		"__type__": "Pool",
 		"tokens": {
 			"DAI": {
-				"weight": 0.2,
-				"denorm_weight": 10.0,
-				"balance": 10000000.0,
+				"weight": "0.2",
+				"denorm_weight": "10",
+				"balance": "10000000",
 				"bound": true
 			},
 			"WETH": {
-				"weight": 0.8,
-				"denorm_weight": 40.0,
-				"balance": 67738.6361731024,
+				"weight": "0.8",
+				"denorm_weight": "40",
+				"balance": "67738.636173102396002749",
 				"bound": true
 			}
 		},
@@ -19,8 +19,8 @@
 			"DAI": 0.0,
 			"WETH": 0.0
 		},
-		"pool_shares": 100.0,
-		"swap_fee": 0.0025
+		"pool_shares": "100",
+		"swap_fee": "0.0025"
 	},
 	"action_type": "pool_creation",
 	"change_datetime": "2020-12-07T13:34:14+00:00",

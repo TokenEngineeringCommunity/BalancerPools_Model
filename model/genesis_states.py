@@ -13,9 +13,9 @@ from model.models import Token, Pool
 def generate_initial_state(initial_values_json: str, spot_price_base_currency: str) -> typing.Dict:
     def customtypes_hook(k):
         if "__type__" in k and k["__type__"] == "Pool":
-            return Pool(tokens=k["tokens"], generated_fees=k["generated_fees"], shares=k["pool_shares"], swap_fee=k["swap_fee"])
+            return Pool(tokens=k["tokens"], generated_fees=k["generated_fees"], shares=Decimal(k["pool_shares"]), swap_fee=Decimal(k["swap_fee"]))
         if "weight" in k and "denorm_weight" in k and "balance" in k and "bound" in k:
-            return Token(weight=k["weight"], denorm_weight=k["denorm_weight"], balance=Decimal(k["balance"]), bound=k["bound"])
+            return Token(weight=Decimal(k["weight"]), denorm_weight=Decimal(k["denorm_weight"]), balance=Decimal(k["balance"]), bound=k["bound"])
         return k
 
     with open(initial_values_json, "r") as f:
@@ -30,9 +30,9 @@ def generate_initial_state(initial_values_json: str, spot_price_base_currency: s
         other_token = initial_values['pool'].tokens[t]
 
         spot_prices[t] = BalancerMath.calc_spot_price(token_balance_in=base_token.balance,
-                                                      token_weight_in=Decimal(base_token.denorm_weight),
+                                                      token_weight_in=base_token.denorm_weight,
                                                       token_balance_out=other_token.balance,
-                                                      token_weight_out=Decimal(other_token.denorm_weight),
-                                                      swap_fee=Decimal(initial_values['pool'].swap_fee))
+                                                      token_weight_out=other_token.denorm_weight,
+                                                      swap_fee=initial_values['pool'].swap_fee)
     initial_values["spot_prices"] = spot_prices
     return initial_values

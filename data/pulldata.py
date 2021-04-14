@@ -267,6 +267,7 @@ def stage2_produce_initial_state(new_results, fees_results, transfer_results) ->
     creation_date = new_results.iloc[0]['block_timestamp'].isoformat()
     initial_states = {
         'pool': {
+            '__type__': 'Pool',
             'tokens': tokens,
             'generated_fees': generated_fees,
             'pool_shares': pool_shares,

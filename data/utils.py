@@ -20,7 +20,7 @@ class CustomJSONEncoder(json.JSONEncoder):
         if isinstance(obj, datetime):
             return obj.isoformat()
         if isinstance(obj, Decimal):
-            return float(f'{obj.normalize():f}')  # using normalize() gets rid of trailing 0s, using ':f' prevents scientific notation
+            return str(obj)
         return super().encode(obj)
 
 def load_pickle(path):
