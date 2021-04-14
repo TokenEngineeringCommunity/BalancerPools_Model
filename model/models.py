@@ -112,7 +112,8 @@ class Pool:
             raise Exception('ERR_IS_BOUND')
         if len(list(self.tokens.keys())) >= MAX_BOUND_TOKENS:
             raise Exception("ERR_MAX_TOKENS")
-        self.tokens[token_symbol] = Token(weight=Decimal('0'), denorm_weight=Decimal('0'), balance=Decimal('0'), bound=True)
+        token.bound = True
+        self.tokens[token_symbol] = token
         return self.rebind(token_symbol, token)
 
     def rebind(self, token_symbol: str, token: Token) -> Decimal:
