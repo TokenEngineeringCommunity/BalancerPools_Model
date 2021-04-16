@@ -14,8 +14,8 @@ def generate_initial_state(initial_values_json: str, spot_price_base_currency: s
     def customtypes_hook(k):
         if "__type__" in k and k["__type__"] == "Pool":
             return Pool(tokens=k["tokens"], generated_fees=k["generated_fees"], shares=Decimal(k["pool_shares"]), swap_fee=Decimal(k["swap_fee"]))
-        if "weight" in k and "denorm_weight" in k and "balance" in k and "bound" in k:
-            return Token(weight=Decimal(k["weight"]), denorm_weight=Decimal(k["denorm_weight"]), balance=Decimal(k["balance"]), bound=k["bound"])
+        if "__type__" in k and k["__type__"] == "Token":
+            return Token(denorm_weight=Decimal(k["denorm_weight"]), balance=Decimal(k["balance"]), bound=k["bound"])
         return k
 
     with open(initial_values_json, "r") as f:

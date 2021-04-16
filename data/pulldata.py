@@ -75,15 +75,12 @@ def get_initial_token_distribution(new_results) -> dict:
         total_denorm_weight += denorm
 
         tokens[token_symbol] = {
-            'weight': None,
+            '__type__': 'Token',
             'denorm_weight': denorm,
             'balance': balance,
             'bound': True
         }
 
-    for (key, token) in tokens.items():
-        denorm = Decimal(token['denorm_weight'])
-        token['weight'] = denorm / total_denorm_weight
     return tokens
 
 

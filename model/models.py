@@ -12,18 +12,17 @@ def ensure_type(value, types):
             value=value, value_type=type(value), types=types))
 
 class Token:
-    def __init__(self, weight: Decimal, denorm_weight: Decimal, balance: Decimal, bound: bool):
-        self.weight = weight
+    def __init__(self, denorm_weight: Decimal, balance: Decimal, bound: bool):
         self.denorm_weight = denorm_weight
         self.balance = balance
         self.bound = bound
 
     def __repr__(self):
-        return "<Token weight: {}, denorm_weight: {}, balance: {}, bound: {}>".format(self.weight, self.denorm_weight, self.balance, self.bound)
+        return "<Token weight: {} (calculated), denorm_weight: {}, balance: {}, bound: {}>".format(self.weight, self.denorm_weight, self.balance, self.bound)
 
     def __eq__(self, other):
         if isinstance(other, Token):
-            return (self.weight == other.weight) and (self.denorm_weight == other.denorm_weight) and (self.balance == other.balance) and (self.bound == other.bound)
+            return (self.denorm_weight == other.denorm_weight) and (self.balance == other.balance) and (self.bound == other.bound)
         return NotImplemented
 
     def add(self, num):
@@ -37,6 +36,10 @@ class Token:
     @balance.setter
     def balance(self, value):
         self.__dict__['balance'] = ensure_type(value, Decimal)
+
+    @property
+    def weight(self):
+        return self.denorm_weight / MAX_TOTAL_WEIGHT
 
 class Pool:
     def __init__(self, tokens: typing.Dict, generated_fees: typing.Dict, shares: Decimal, swap_fee: Decimal):
@@ -138,11 +141,7 @@ class Pool:
 
         old_balance = self.tokens[token_symbol].balance
         self.tokens[token_symbol].balance = token.balance
-        for ts in self.tokens.keys():
-            if self.total_denorm_weight == Decimal('0'):
-                self.tokens[ts].weight = 1.0
-            else:
-                self.tokens[ts].weight = self.tokens[ts].denorm_weight / self.total_denorm_weight
+
         if token.balance > old_balance:
             return - (token.balance - old_balance)
         elif token.balance < old_balance:
