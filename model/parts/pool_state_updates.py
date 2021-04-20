@@ -93,7 +93,7 @@ def s_swap_exact_amount_in(params, step, history, current_state, input_params: S
         raise Exception('ERR_NOT_BOUND')
 
     if token_amount_in > Decimal(pool_token_in.balance) * MAX_IN_RATIO:
-        raise Exception("ERR_MAX_IN_RATIO")
+        print("ERR_MAX_IN_RATIO")
 
     swap_result = BalancerMath.calc_out_given_in(
         token_balance_in=pool_token_in.balance,

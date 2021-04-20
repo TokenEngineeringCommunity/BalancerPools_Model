@@ -63,8 +63,7 @@ class Pool:
     def as_dict(self):
         return self.__dict__
 
-    def calculate_spot_prices(self, ref_token: str):
-        swap_fee = self.swap_fee
+    def spot_prices(self, ref_token: str):
         ref_tokens = []
         if ref_token is None:
             ref_tokens = list(self.tokens.keys())

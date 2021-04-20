@@ -8,8 +8,14 @@ from attr import dataclass
 from model.parts.balancer_math import BalancerMath
 from model.parts.pool_method_entities import SwapExactAmountInInput, SwapExactAmountInOutput, TokenAmount
 
-MAX_DECIMAL=Context(Emax=MAX_EMAX, prec=1).create_decimal('9e'+str(MAX_EMAX))
-VERBOSE=False
+MAX_DECIMAL = Context(Emax=MAX_EMAX, prec=1).create_decimal('9e' + str(MAX_EMAX))
+VERBOSE = True
+
+
+def print_if_verbose(text: any, *args):
+    if VERBOSE:
+        print(text, *args)
+
 
 @dataclass
 class PotentialArbTrade:
@@ -23,14 +29,13 @@ class PotentialArbTrade:
 
 
 def calculate_optimal_trade_size(params, current_state, token_in, token_out, external_token_prices, potential_trades):
-    max_arb_liquidity = params[0]['max_arb_liquidity'] # usd
-    min_arb_liquidity = params[0]['min_arb_liquidity'] # usd
-    arb_liquidity_granularity = params[0]['arb_liquidity_granularity'] #usd
+    max_arb_liquidity = params[0]['max_arb_liquidity']  # usd
+    min_arb_liquidity = params[0]['min_arb_liquidity']  # usd
+    arb_liquidity_granularity = params[0]['arb_liquidity_granularity']  # usd
     transaction_cost = current_state['gas_cost']
     pool = current_state['pool']
-    pool_token_in = pool['tokens'][token_in]
-    pool_token_out = pool['tokens'][token_out]
-    swap_fee = pool['swap_fee']
+    pool_token_in = pool.tokens[token_in]
+    pool_token_out = pool.tokens[token_out]
     for arb_liq in range(min_arb_liquidity, max_arb_liquidity, arb_liquidity_granularity):
         # 1000 usd
         # 1000 usd to amount_in using external price
@@ -49,7 +54,7 @@ def calculate_optimal_trade_size(params, current_state, token_in, token_out, ext
             token_balance_out=pool_token_out.balance,
             token_weight_out=Decimal(pool_token_out.denorm_weight),
             token_amount_in=token_amount_in,
-            swap_fee=Decimal(swap_fee)
+            swap_fee=pool.swap_fee
         )
         # print('token_amount_out', swap_result.result)
         amount_out_external_price = external_token_prices[token_out] * swap_result.result
@@ -74,21 +79,20 @@ def p_arbitrageur(params, step, history, current_state):
     potential_trades = []
     # token out : token_in
     external_token_prices = dict((k, Decimal(v)) for k, v in current_state['token_prices'].items())
-
     for token_out in spot_prices.keys():
-        if VERBOSE: print('token_out', token_out)
+        print_if_verbose('token_out', token_out)
         for token_in in spot_prices[token_out].keys():
-            if VERBOSE: print('token_in', token_in)
+            print_if_verbose('token_in', token_in)
             spot_price_token_in = spot_prices[token_out][token_in]
-            if VERBOSE: print(f'spot price: 1 {token_in} = {spot_price_token_in} {token_out}',)
-            if VERBOSE: print(f'external price token in: 1{token_in} = {external_token_prices[token_in]} {external_currency}')
-            if VERBOSE: print(f'external price token out: 1{token_out} = {external_token_prices[token_out]} {external_currency}')
-            spot_price_token_in_external_currency =  spot_price_token_in * external_token_prices[token_out]
-            if VERBOSE: print(f'spot_price_token_in external curr: 1 {token_in} = {spot_price_token_in_external_currency} {external_currency}')
+            print_if_verbose(f'spot price: 1 {token_in} = {spot_price_token_in} {token_out}', )
+            print_if_verbose(f'external price token in: 1{token_in} = {external_token_prices[token_in]} {external_currency}')
+            print_if_verbose(f'external price token out: 1{token_out} = {external_token_prices[token_out]} {external_currency}')
+            spot_price_token_in_external_currency = spot_price_token_in * external_token_prices[token_out]
+            print_if_verbose(f'spot_price_token_in external curr: 1 {token_in} = {spot_price_token_in_external_currency} {external_currency}')
             # sell token out in external market. Price outside must be bigger than spot price in
-            if VERBOSE: print(f'{spot_price_token_in_external_currency} < {external_token_prices[token_in]}')
+            print_if_verbose(f'{spot_price_token_in_external_currency} < {external_token_prices[token_in]}')
             if spot_price_token_in_external_currency < external_token_prices[token_in]:
-                if VERBOSE: print('possible trade')
+                print_if_verbose('possible trade')
                 calculate_optimal_trade_size(params, current_state, token_in, token_out, external_token_prices, potential_trades)
 
     # Sort by profit
@@ -96,24 +100,25 @@ def p_arbitrageur(params, step, history, current_state):
     # Filter out profit < transaction cost
     potential_trades = list(filter(lambda trade: trade.profit > trade.transaction_cost, potential_trades))
     most_profitable_trade = potential_trades[0]
-    if VERBOSE: print('most_profitable_trade', most_profitable_trade)
+    print_if_verbose('most_profitable_trade', most_profitable_trade)
     if most_profitable_trade:
         swap_input = SwapExactAmountInInput(token_in=TokenAmount(
-          symbol=most_profitable_trade.token_in,
-          amount=most_profitable_trade.token_amount_in
+            symbol=most_profitable_trade.token_in,
+            amount=most_profitable_trade.token_amount_in
         ), min_token_out=TokenAmount(
-          symbol=most_profitable_trade.token_out,
-          amount=Decimal('0')
+            symbol=most_profitable_trade.token_out,
+            amount=Decimal('0')
         ))
-        swap_output = SwapExactAmountInOutput(token_out=TokenAmount(amount=most_profitable_trade.token_amount_out, symbol=token_out))
+
+        swap_output = SwapExactAmountInOutput(token_out=TokenAmount(amount=most_profitable_trade.token_amount_out, symbol=most_profitable_trade.token_out))
+        print(swap_input, swap_output)
         # add 15 seconds, more or less next block
         action_datetime = current_state['change_datetime'] + timedelta(0, 15)
         return {
             'pool_update': (swap_input, swap_output),
             'change_datetime_update': pd.Timestamp(action_datetime.isoformat()),
             'action_type': 'swap',
-            }
-    if VERBOSE: print('no trade')
+        }
+    print_if_verbose('no trade')
     return {'external_price_update': None, 'change_datetime_update': None, 'action_type': None,
-                    'pool_update': None}
-
+            'pool_update': None}

@@ -178,7 +178,7 @@ class BalancerPool(BalancerMath):
             raise Exception('ERR_NOT_BOUND')
 
         if token_amount_in > min_pool_amount_out.balance * MAX_IN_RATIO:
-            raise Exception("ERR_MAX_IN_RATIO")
+            print("ERR_MAX_IN_RATIO")
 
         spot_price_before = self.calc_spot_price(
             token_balance_in=min_pool_amount_out.balance,
