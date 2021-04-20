@@ -33,8 +33,14 @@ def unpack_column_generated_fees(column_fees: pd.Series, token_symbols: typing.L
 
 
 def unpack_column_pool(df: pd.DataFrame) -> pd.DataFrame:
-    column_pool = pd.DataFrame.from_records(df["pool"].to_list())
     token_symbols = assets_in_df(df)
+    # TODO: the Pool.as_dict() interface is heavily relied on here (except for
+    # the line above) because postprocessing was written back when pool the
+    # state variable was a dict
+    list_of_pool_objs = df["pool"].to_list()
+    list_of_pool_dicts = [p.as_dict() for p in list_of_pool_objs]
+    column_pool = pd.DataFrame.from_records(list_of_pool_dicts)
+
     column_tokens = column_pool["tokens"]
     column_tokens_unpacked = unpack_column_tokens(column_tokens, token_symbols)
     column_fees = column_pool['generated_fees']
@@ -69,7 +75,7 @@ def unpack_column_spot_prices(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def assets_in_df(df: pd.DataFrame) -> typing.List[str]:
-    assets = list(df.pool[0]["tokens"].keys())
+    assets = list(df.pool[0].tokens.keys())
     assets.sort()
     assets = [a.lower() for a in assets]
     return assets
@@ -94,7 +100,7 @@ def post_processing(df: pd.DataFrame, include_spot_prices=False) -> pd.DataFrame
 
     # Convert change_datetime from str to datetime, other columns to float64
     df["change_datetime"] = pd.to_datetime(df["change_datetime"], utc=True)
-    df = df.astype({"pool_shares": "float64", "swap_fee": "float64"})
+    df = df.astype({"shares": "float64", "swap_fee": "float64"})
 
     # Calculate token_{x}_value columns
     token_x_value = calc_token_x_value(df)

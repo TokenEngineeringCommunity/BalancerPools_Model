@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import datetime
 import json
 import pickle
@@ -14,9 +15,13 @@ def save_json(x, path, indent=True, **kwargs):
             json.dump(x, f, **kwargs)
     print("Saved to", path)
 
-def json_serialize_datetime(o):
-    if isinstance(o, datetime):
-        return o.isoformat()
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return super().encode(obj)
 
 def load_pickle(path):
     print("Unpickling from", path)

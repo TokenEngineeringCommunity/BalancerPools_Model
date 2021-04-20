@@ -6,7 +6,7 @@ import re
 from itertools import product
 from pycoingecko import CoinGeckoAPI
 from datetime import datetime, timedelta, timezone
-from utils import load_json, save_json, json_serialize_datetime
+from utils import load_json, save_json, CustomJSONEncoder
 cg = CoinGeckoAPI()
 symbol_id_map = {}
 
@@ -83,7 +83,7 @@ def load_coingecko_prices_json(path: str):
 
 def save_coingecko_prices_json(pool_address: str, token: str, base: str, prices: typing.List[typing.Tuple]):
     path = f'./{pool_address}/coingecko-{token.upper()}{base.upper()}.json'
-    save_json(prices, path, default=json_serialize_datetime)
+    save_json(prices, path, cls=CustomJSONEncoder)
     return path
 
 def dataframeize(prices: typing.List[typing.Tuple], column_name: str) -> pd.DataFrame:
