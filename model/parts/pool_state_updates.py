@@ -42,15 +42,15 @@ def powerpool_linear_weight_change(state_update_function, weight_change_factor):
         balances_old = current_pool.balances
         updated_pool = state_update_function(*args, **kwargs)
         balances_new = updated_pool.balances
-        print(balances_old, balances_new)
-        for token in balances_old:
-            # print(state_update_function)
-            if balances_new[token] > balances_old[token]:
-                updated_pool.tokens[token].weight *= (1 - weight_change_factor)  # e.g. 0.5% becomes 1- 0.005 = 0.995
-                print('Changing weight of {} to {}'.format(token, updated_pool.tokens[token].weight))
-            elif balances_new[token] < balances_old[token]:
-                updated_pool.tokens[token].weight *= (1 + weight_change_factor)
-                print('Changing weight of {} to {}'.format(token, updated_pool.tokens[token].weight))
+        # print(balances_old, balances_new)
+        # for token in balances_old:
+        #     # print(state_update_function)
+        #     if balances_new[token] > balances_old[token]:
+        #         updated_pool.tokens[token].weight *= (1 - weight_change_factor)  # e.g. 0.5% becomes 1- 0.005 = 0.995
+        #         print('Changing weight of {} to {}'.format(token, updated_pool.tokens[token].weight))
+        #     elif balances_new[token] < balances_old[token]:
+        #         updated_pool.tokens[token].weight *= (1 + weight_change_factor)
+        #         print('Changing weight of {} to {}'.format(token, updated_pool.tokens[token].weight))
         return updated_pool
 
     return wrapped_state_update_function
