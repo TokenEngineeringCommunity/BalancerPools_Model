@@ -1,4 +1,5 @@
 import json
+import copy
 import typing
 from decimal import Decimal
 from model.parts.balancer_math import BalancerMath
@@ -123,7 +124,12 @@ class Pool:
             ans[t] = self.tokens[t].balance
         return ans
 
-    def bind(self, token_symbol: str, token: Token) -> Decimal:
+    def change_weight(self, token_symbol: str, new_denorm_weight: Decimal) -> Decimal:
+        token_weight_to_be_changed = copy.deepcopy(self.tokens[token_symbol])
+        token_weight_to_be_changed.denorm_weight = new_denorm_weight
+        return self._rebind(token_symbol, token_weight_to_be_changed)
+
+    def _bind(self, token_symbol: str, token: Token) -> Decimal:
         if self.tokens.get(token_symbol) is not None and self.tokens.get(token_symbol).bound is True:
             raise Exception('ERR_IS_BOUND')
         if len(list(self.tokens.keys())) >= MAX_BOUND_TOKENS:
@@ -132,7 +138,12 @@ class Pool:
         self.tokens[token_symbol] = token
         return self.rebind(token_symbol, token)
 
-    def rebind(self, token_symbol: str, token: Token) -> Decimal:
+    def _rebind(self, token_symbol: str, token: Token) -> Decimal:
+        """
+        CAUTION: contains pool validation logic that will be easily fooled if
+        you edit the pool's Token directly before calling this function
+        To be safe, use change_weight() instead.
+        """
         if self.tokens.get(token_symbol) is None or self.tokens.get(token_symbol).bound is False:
             raise Exception("ERR_NOT_BOUND")
         if token.denorm_weight < MIN_WEIGHT:
@@ -142,14 +153,12 @@ class Pool:
         if token.balance < MIN_BALANCE:
             raise Exception("ERR_MIN_BALANCE")
         old_weight = self.tokens[token_symbol].denorm_weight
-        print('total_denorm', self.total_denorm_weight)
+
         if token.denorm_weight > old_weight:
             total_denorm_weight_new = self.total_denorm_weight + (token.denorm_weight - old_weight)
-            print('total_denorm >', total_denorm_weight_new)
             if total_denorm_weight_new > MAX_TOTAL_WEIGHT:
                 raise Exception("ERR_MAX_TOTAL_WEIGHT")
-        elif token.denorm_weight < old_weight:
-            print('total_denorm <', self.total_denorm_weight)
+
         self.tokens[token_symbol].denorm_weight = token.denorm_weight
 
         old_balance = self.tokens[token_symbol].balance
@@ -161,7 +170,7 @@ class Pool:
             token_balance_withdrawn = old_balance - token.balance
             return token_balance_withdrawn
 
-    def unbind(self, token_symbol: str) -> dict:
+    def _unbind(self, token_symbol: str) -> dict:
         if self.tokens.get(token_symbol) is None or self.tokens.get(token_symbol).bound is False:
             raise Exception("ERR_NOT_BOUND")
 
