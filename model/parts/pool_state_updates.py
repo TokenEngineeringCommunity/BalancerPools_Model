@@ -27,19 +27,19 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
         return s_pool_update_fee(previous_state['pool'], {})
 
     decoding_type = get_param(params, "decoding_type")
-    weight_change_factor = get_param(params, "weight_change_factor")
     if decoding_type == ActionDecodingType.replay_output:
         pool_operation_suf = pool_replay_output_mappings[type(pool_opcodes[0])]
     else:
         pool_operation_suf = pool_operation_mappings[type(pool_opcodes[0])]
-        # TODO: make weight chaning on/off by parameter
-        # pool_operation_suf = powerpool_linear_weight_change(pool_operation_suf, weight_change_factor)
+
+    if get_param(params, 'weight_changing'):
+        print("Gonna enable powerpool linear weight change after each swap")
+        pool_operation_suf = powerpool_linear_weight_change(pool_operation_suf)
 
     pool = pool_operation_suf(params, substep, state_history, previous_state, pool_opcodes[0], pool_opcodes[1])
     return 'pool', pool
 
-
-def powerpool_linear_weight_change(state_update_function, weight_change_factor):
+def powerpool_linear_weight_change(state_update_function):
     def wrapped_state_update_function(*args, **kwargs):
         pool_opcode_in = args[4]
         pool_opcode_out = args[5]
