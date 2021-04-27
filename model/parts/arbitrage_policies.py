@@ -79,6 +79,7 @@ def p_arbitrageur(params, step, history, current_state):
     spot_prices = current_state['spot_prices']
     external_currency = params[0]['external_currency']
     potential_trades = []
+    print_if_verbose('============================================')
     # token in : token_in
     external_token_prices = dict((k, Decimal(v)) for k, v in current_state['token_prices'].items())
     for token_in in spot_prices.keys():
