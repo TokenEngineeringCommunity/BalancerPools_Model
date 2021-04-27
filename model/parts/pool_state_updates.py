@@ -30,7 +30,8 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
         pool_operation_suf = pool_replay_output_mappings[type(pool_opcodes[0])]
     else:
         pool_operation_suf = pool_operation_mappings[type(pool_opcodes[0])]
-        pool_operation_suf = powerpool_linear_weight_change(pool_operation_suf, weight_change_factor)
+        # TODO: make weight chaning on/off by parameter
+        # pool_operation_suf = powerpool_linear_weight_change(pool_operation_suf, weight_change_factor)
 
     pool = pool_operation_suf(params, substep, state_history, previous_state, pool_opcodes[0], pool_opcodes[1])
     return 'pool', pool
@@ -64,7 +65,7 @@ def s_update_spot_prices(params, substep, state_history, previous_state, policy_
         ref_token = params[0].get('spot_price_reference')
     else:
         # Parameter sweep
-        ref_token = params['spot_price_reference']
+        ref_token = params.get('spot_price_reference')
 
     spot_prices = pool.spot_prices(ref_token)
     return 'spot_prices', spot_prices
@@ -93,7 +94,7 @@ def s_swap_exact_amount_in(params, step, history, current_state, input_params: S
         raise Exception('ERR_NOT_BOUND')
 
     if token_amount_in > Decimal(pool_token_in.balance) * MAX_IN_RATIO:
-        print("ERR_MAX_IN_RATIO")
+        raise Exception("ERR_MAX_IN_RATIO")
 
     swap_result = BalancerMath.calc_out_given_in(
         token_balance_in=pool_token_in.balance,

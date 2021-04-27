@@ -32,6 +32,13 @@ def unpack_column_generated_fees(column_fees: pd.Series, token_symbols: typing.L
     return pd.DataFrame.from_dict(di)
 
 
+def unpack_column_shares(column_shares: pd.Series):
+    di = {f'pool_shares': []}
+    for r in column_shares:
+        di[f'pool_shares'].append(r)
+    return pd.DataFrame.from_dict(di)
+
+
 def unpack_column_pool(df: pd.DataFrame) -> pd.DataFrame:
     token_symbols = assets_in_df(df)
     # TODO: the Pool.as_dict() interface is heavily relied on here (except for
@@ -41,11 +48,16 @@ def unpack_column_pool(df: pd.DataFrame) -> pd.DataFrame:
     list_of_pool_dicts = [p.as_dict() for p in list_of_pool_objs]
     column_pool = pd.DataFrame.from_records(list_of_pool_dicts)
 
+    column_shares = column_pool["shares"]
+    column_shares = unpack_column_shares(column_shares)
+
     column_tokens = column_pool["tokens"]
     column_tokens_unpacked = unpack_column_tokens(column_tokens, token_symbols)
+
+
     column_fees = column_pool['generated_fees']
     column_generated_fees_unpacked = unpack_column_generated_fees(column_fees, token_symbols)
-    return column_pool.assign(**column_tokens_unpacked).assign(**column_generated_fees_unpacked).drop("tokens", axis=1)
+    return column_pool.assign(**column_tokens_unpacked).assign(**column_generated_fees_unpacked).assign(**column_shares).drop("tokens", axis=1)
 
 
 def unpack_column_token_prices(df: pd.DataFrame) -> pd.DataFrame:
@@ -59,6 +71,7 @@ def unpack_column_token_prices(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame.from_dict(di)
 
 
+
 # At this point I should generalize the "unpacking" pattern, but then it'd be even harder to follow once I've forgotten everything
 def unpack_column_spot_prices(df: pd.DataFrame) -> pd.DataFrame:
     column_spot_prices = df.spot_prices
@@ -66,11 +79,16 @@ def unpack_column_spot_prices(df: pd.DataFrame) -> pd.DataFrame:
     token_symbols = list(column_spot_prices[0].keys())
     token_symbols.sort()
     di = {}
-    for symbol in token_symbols:
-        symbol_low = symbol.lower()
-        di[f'token_{symbol_low}_spot_price'] = []
-        for r in column_spot_prices:
-            di[f'token_{symbol_low}_spot_price'].append(r[symbol])
+    for token_in in token_symbols:
+        token_in_low = token_in.lower()
+        tokens_out = token_symbols.copy()
+        tokens_out.remove(token_in)
+        for token_out in tokens_out:
+            token_out_low = token_out.lower()
+            di[f'token_spot_price_{token_in_low}_{token_out_low}'] = []
+            for r in column_spot_prices:
+                price = r[token_in][token_out]
+                di[f'token_spot_price_{token_in_low}_{token_out_low}'].append(price)
     return pd.DataFrame.from_dict(di).astype('float64')
 
 
@@ -85,7 +103,7 @@ def calc_token_x_value(df: pd.DataFrame) -> pd.DataFrame:
     symbols = assets_in_df(df)
     di = {}
     for s in symbols:
-        di[f'token_{s}_value'] = df[f'token_{s}_balance'].astype(float) * df[f'token_{s}_price']
+        di[f'token_{s}_value'] = df[f'token_{s}_balance'].astype(float) * df[f'token_{s}_price'].astype(float)
     return pd.DataFrame.from_dict(di)
 
 

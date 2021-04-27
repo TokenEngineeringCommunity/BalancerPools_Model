@@ -5,11 +5,13 @@ from operator import attrgetter
 
 import dateutil
 from attr import dataclass
+
+from model.parts.balancer_constants import MAX_IN_RATIO
 from model.parts.balancer_math import BalancerMath
 from model.parts.pool_method_entities import SwapExactAmountInInput, SwapExactAmountInOutput, TokenAmount
 
 MAX_DECIMAL = Context(Emax=MAX_EMAX, prec=1).create_decimal('9e' + str(MAX_EMAX))
-VERBOSE = True
+VERBOSE = False
 
 
 def print_if_verbose(text: any, *args):
@@ -77,13 +79,13 @@ def p_arbitrageur(params, step, history, current_state):
     spot_prices = current_state['spot_prices']
     external_currency = params[0]['external_currency']
     potential_trades = []
-    # token out : token_in
+    # token in : token_in
     external_token_prices = dict((k, Decimal(v)) for k, v in current_state['token_prices'].items())
-    for token_out in spot_prices.keys():
-        print_if_verbose('token_out', token_out)
-        for token_in in spot_prices[token_out].keys():
-            print_if_verbose('token_in', token_in)
-            spot_price_token_in = spot_prices[token_out][token_in]
+    for token_in in spot_prices.keys():
+        print_if_verbose('token_in', token_in)
+        for token_out in spot_prices[token_in].keys():
+            print_if_verbose('token_out', token_out)
+            spot_price_token_in = spot_prices[token_in][token_out]
             print_if_verbose(f'spot price: 1 {token_in} = {spot_price_token_in} {token_out}', )
             print_if_verbose(f'external price token in: 1{token_in} = {external_token_prices[token_in]} {external_currency}')
             print_if_verbose(f'external price token out: 1{token_out} = {external_token_prices[token_out]} {external_currency}')
@@ -94,14 +96,18 @@ def p_arbitrageur(params, step, history, current_state):
             if spot_price_token_in_external_currency < external_token_prices[token_in]:
                 print_if_verbose('possible trade')
                 calculate_optimal_trade_size(params, current_state, token_in, token_out, external_token_prices, potential_trades)
-
-    # Sort by profit
+            else:
+                print_if_verbose('no trade')
+    # Sort by profitERR_MAX_IN_RATIO
     potential_trades = sorted(potential_trades, key=attrgetter('profit'), reverse=True)
     # Filter out profit < transaction cost
     potential_trades = list(filter(lambda trade: trade.profit > trade.transaction_cost, potential_trades))
-    most_profitable_trade = potential_trades[0]
-    print_if_verbose('most_profitable_trade', most_profitable_trade)
-    if most_profitable_trade:
+    # Filter out trades raising security exceptions in pool
+    potential_trades = list(filter(lambda trade: trade.token_amount_in < pool.tokens[trade.token_in].balance * MAX_IN_RATIO, potential_trades))
+
+    if len(potential_trades) > 0:
+        most_profitable_trade = potential_trades[0]
+        print_if_verbose('most_profitable_trade', most_profitable_trade)
         swap_input = SwapExactAmountInInput(token_in=TokenAmount(
             symbol=most_profitable_trade.token_in,
             amount=most_profitable_trade.token_amount_in
@@ -111,7 +117,7 @@ def p_arbitrageur(params, step, history, current_state):
         ))
 
         swap_output = SwapExactAmountInOutput(token_out=TokenAmount(amount=most_profitable_trade.token_amount_out, symbol=most_profitable_trade.token_out))
-        print(swap_input, swap_output)
+        print_if_verbose(swap_input, swap_output)
         # add 15 seconds, more or less next block
         action_datetime = current_state['change_datetime'] + timedelta(0, 15)
         return {

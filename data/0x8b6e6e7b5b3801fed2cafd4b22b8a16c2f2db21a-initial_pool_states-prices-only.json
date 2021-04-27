@@ -2,12 +2,14 @@
 	"pool": {
 		"tokens": {
 			"DAI": {
+				"__type__": "Token",
 				"weight": "0.2",
 				"denorm_weight": "10",
 				"balance": "10000000",
 				"bound": true
 			},
 			"WETH": {
+				"__type__": "Token",
 				"weight": "0.8",
 				"denorm_weight": "40",
 				"balance": "67738.636173102396002749",
@@ -15,8 +17,8 @@
 			}
 		},
 		"generated_fees": {
-			"DAI": "0.0",
-			"WETH": "0.0"
+			"DAI": 0.0,
+			"WETH": 0.0
 		},
 		"pool_shares": "100",
 		"swap_fee": "0.0025"

@@ -1,15 +1,5 @@
 [
-	{
-		"timestamp": "2020-12-07T14:00:00+00:00",
-		"fiat_currency": "USD",
-		"action": {
-			"type": "external_price_update",
-			"tokens": {
-				"DAI": NaN,
-				"WETH": 596.1937868299183
-			}
-		}
-	},
+
 	{
 		"timestamp": "2020-12-07T15:00:00+00:00",
 		"fiat_currency": "USD",
