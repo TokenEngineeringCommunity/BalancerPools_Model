@@ -1,3 +1,5 @@
+import ipdb
+import copy
 from decimal import Decimal
 
 from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
@@ -39,21 +41,38 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
 
 def powerpool_linear_weight_change(state_update_function, weight_change_factor):
     def wrapped_state_update_function(*args, **kwargs):
-        current_pool = args[3]['pool']
-        balances_old = current_pool.balances
-        updated_pool = state_update_function(*args, **kwargs)
-        balances_new = updated_pool.balances
-        # print(balances_old, balances_new)
-        # for token in balances_old:
-        #     # print(state_update_function)
-        #     if balances_new[token] > balances_old[token]:
-        #         updated_pool.tokens[token].weight *= (1 - weight_change_factor)  # e.g. 0.5% becomes 1- 0.005 = 0.995
-        #         print('Changing weight of {} to {}'.format(token, updated_pool.tokens[token].weight))
-        #     elif balances_new[token] < balances_old[token]:
-        #         updated_pool.tokens[token].weight *= (1 + weight_change_factor)
-        #         print('Changing weight of {} to {}'.format(token, updated_pool.tokens[token].weight))
-        return updated_pool
+        pool_opcode_in = args[4]
+        pool_opcode_out = args[5]
+        pool = state_update_function(*args, **kwargs)
+        if type(pool_opcode_in) is SwapExactAmountInInput and type(pool_opcode_out) is SwapExactAmountInOutput:
+            print("swap: will change weight")
+            token_in = pool_opcode_in.token_in
+            token_out = pool_opcode_out.token_out
 
+            swap_size_proportion = token_in.amount / pool.tokens[token_in.symbol].balance
+            print(token_in, "has a size of", swap_size_proportion)
+            if swap_size_proportion > 1:
+                raise Exception("WEIGHT CHANGE ERROR: swap amount being way larger than pool balance messes up the weight changing strategy")
+
+            weight_increase_factor = Decimal(1) + Decimal(swap_size_proportion)
+            weight_decrease_factor = Decimal(1) - Decimal(swap_size_proportion)
+            pool_token_in = pool.tokens[token_in.symbol]
+            print("Multiplying {}.denorm_weight by {}".format(token_in.symbol, weight_decrease_factor))
+            pool_token_in_new_denorm_weight = pool_token_in.denorm_weight * weight_decrease_factor
+            pool.change_weight(token_in.symbol, pool_token_in_new_denorm_weight)
+
+            pool_token_out = pool.tokens[token_out.symbol]
+            print("Multiplying {}.denorm_weight by {}".format(token_out.symbol, weight_increase_factor))
+            pool_token_out_new_denorm_weight = pool_token_out.denorm_weight * weight_increase_factor
+            pool.change_weight(token_out.symbol, pool_token_out_new_denorm_weight)
+
+        elif type(pool_opcode_in) is SwapExactAmountOutInput:
+            pass
+        elif type(pool_opcode_in) in [JoinSwapExternAmountInInput, JoinSwapPoolAmountOutInput]:
+            print("joinswap: won't change weight for now")
+        elif type(pool_opcode_in) in [ExitSwapPoolExternAmountOutInput]:
+            print("exitswap: won't change weight for now")
+        return pool
     return wrapped_state_update_function
 
 
