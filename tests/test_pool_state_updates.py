@@ -1,7 +1,7 @@
 import unittest
 from decimal import Decimal
 
-from model.models import Token
+from model.models import Token, Pool
 from model.parts.pool_method_entities import SwapExactAmountInInput, TokenAmount, SwapExactAmountInOutput, JoinParamsInput, JoinParamsOutput, \
     JoinSwapExternAmountInInput, JoinSwapExternAmountInOutput, ExitSwapPoolAmountInInput, ExitSwapPoolAmountInOutput, ExitPoolInput, ExitPoolOutput, \
     PoolMethodParamsDecoder
@@ -11,18 +11,22 @@ from model.parts.pool_state_updates import s_swap_plot_output, s_join_pool_plot_
 
 
 class TestPlotOutputSystemPolicies(unittest.TestCase):
+    def setUp(self):
+        self.pool = Pool(
+            tokens={
+                'DAI': Token(denorm_weight=Decimal('20'), balance=Decimal('100.0'), bound=True),
+                'WETH': Token(denorm_weight=Decimal('20'), balance=Decimal('100.0'), bound=True),
+            },
+            generated_fees={},
+            shares=Decimal(10),
+            swap_fee=Decimal(0.0025)
+        )
+        self.current_state = {
+            'pool': self.pool
+        }
+
 
     def test_s_swap_plot_output(self):
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('50'), denorm_weight=Decimal('20'), balance=Decimal('100.0')),
-                'DAI': Token(bound=True, weight=Decimal('50'), denorm_weight=Decimal('20'), balance=Decimal('100.0')),
-            }
-        }
-        current_state = {
-            'pool': pool
-        }
-
         input_params = SwapExactAmountInInput(token_in=TokenAmount.ta_with_dict({
             "amount": "110334.994151207114657145",
             "symbol": "DAI"
@@ -34,22 +38,12 @@ class TestPlotOutputSystemPolicies(unittest.TestCase):
             "amount": "94.18699055387891619",
             "symbol": "WETH"
         }))
-        result_pool = s_swap_plot_output(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
+        result_pool = s_swap_plot_output(params={}, step=1, history={}, current_state=self.current_state, input_params=input_params,
                                          output_params=output_params)
-        self.assertAlmostEqual(result_pool['tokens']['WETH'].balance, Decimal('100') - Decimal('94.18699055387891619'))
-        self.assertAlmostEqual(result_pool['tokens']['DAI'].balance, Decimal('100') + Decimal('110334.994151207114657145'))
+        self.assertAlmostEqual(result_pool.tokens['WETH'].balance, Decimal('100') - Decimal('94.18699055387891619'))
+        self.assertAlmostEqual(result_pool.tokens['DAI'].balance, Decimal('100') + Decimal('110334.994151207114657145'))
 
     def test_s_join_pool_plot_output(self):
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('50'), denorm_weight=Decimal('20'), balance=Decimal('100.0')),
-                'DAI': Token(bound=True, weight=Decimal('50'), denorm_weight=Decimal('20'), balance=Decimal('100.0')),
-            },
-            'pool_shares': Decimal('10')
-        }
-        current_state = {
-            'pool': pool
-        }
         input_params = JoinParamsInput(pool_amount_out=Decimal('0.003553700696304231'), tokens_in=['WETH, DAI'])
         output_params = JoinParamsOutput(tokens_in=[
             TokenAmount.ta_with_dict({
@@ -61,67 +55,35 @@ class TestPlotOutputSystemPolicies(unittest.TestCase):
                 "symbol": "DAI"
             })
         ])
-        result_pool = s_join_pool_plot_output(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
+        result_pool = s_join_pool_plot_output(params={}, step=1, history={}, current_state=self.current_state, input_params=input_params,
                                               output_params=output_params)
-        self.assertAlmostEqual(result_pool['tokens']['WETH'].balance, Decimal('100') + Decimal('2.149934784657617805'))
-        self.assertAlmostEqual(result_pool['tokens']['DAI'].balance, Decimal('100') + Decimal('582.4545134357713927'))
-        self.assertAlmostEqual(result_pool['pool_shares'], Decimal('10') + Decimal('0.003553700696304231'))
+        self.assertAlmostEqual(result_pool.tokens['WETH'].balance, Decimal('100') + Decimal('2.149934784657617805'))
+        self.assertAlmostEqual(result_pool.tokens['DAI'].balance, Decimal('100') + Decimal('582.4545134357713927'))
+        self.assertAlmostEqual(result_pool.shares, Decimal('10') + Decimal('0.003553700696304231'))
 
     def test_s_join_swap_plot_output(self):
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('50'), denorm_weight=Decimal('20'), balance=Decimal('100.0')),
-                'DAI': Token(bound=True, weight=Decimal('50'), denorm_weight=Decimal('20'), balance=Decimal('100.0')),
-            },
-            'pool_shares': Decimal('10')
-        }
-        current_state = {
-            'pool': pool
-        }
-
         input_params = JoinSwapExternAmountInInput(token_in=TokenAmount.ta_with_dict({
             "amount": "15377.818885119467224322",
             "symbol": "DAI"
         }))
         output_params = JoinSwapExternAmountInOutput(pool_amount_out=Decimal('0.017357248617768192'))
-        result_pool = s_join_swap_plot_output(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
+        result_pool = s_join_swap_plot_output(params={}, step=1, history={}, current_state=self.current_state, input_params=input_params,
                                               output_params=output_params)
-        self.assertAlmostEqual(result_pool['tokens']['DAI'].balance, Decimal('100') + Decimal('15377.818885119467224322'))
-        self.assertAlmostEqual(result_pool['pool_shares'], Decimal('10') + Decimal('0.017357248617768192'))
+        self.assertAlmostEqual(result_pool.tokens['DAI'].balance, Decimal('100') + Decimal('15377.818885119467224322'))
+        self.assertAlmostEqual(result_pool.shares, Decimal('10') + Decimal('0.017357248617768192'))
 
     def test_s_exit_swap_plot_output(self):
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('50'), denorm_weight=Decimal('20'), balance=Decimal('100.0')),
-                'DAI': Token(bound=True, weight=Decimal('50'), denorm_weight=Decimal('20'), balance=Decimal('100.0')),
-            },
-            'pool_shares': Decimal('10')
-        }
-        current_state = {
-            'pool': pool
-        }
-
         input_params = ExitSwapPoolAmountInInput(pool_amount_in=Decimal('0.001425953068795668'))
         output_params = ExitSwapPoolAmountInOutput(token_out=TokenAmount.ta_with_dict({
             "amount": "1.053713331470558907",
             "symbol": "WETH"
         }))
-        result_pool = s_exit_swap_plot_output(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
+        result_pool = s_exit_swap_plot_output(params={}, step=1, history={}, current_state=self.current_state, input_params=input_params,
                                               output_params=output_params)
-        self.assertAlmostEqual(result_pool['tokens']['WETH'].balance, Decimal('100') - Decimal('1.053713331470558907'))
-        self.assertAlmostEqual(result_pool['pool_shares'], Decimal('10') - Decimal('0.001425953068795668'))
+        self.assertAlmostEqual(result_pool.tokens['WETH'].balance, Decimal('100') - Decimal('1.053713331470558907'))
+        self.assertAlmostEqual(result_pool.shares, Decimal('10') - Decimal('0.001425953068795668'))
 
     def test_s_exit_pool_plot_output(self):
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('50'), denorm_weight=Decimal('20'), balance=Decimal('100.0')),
-                'DAI': Token(bound=True, weight=Decimal('50'), denorm_weight=Decimal('20'), balance=Decimal('100.0')),
-            },
-            'pool_shares': Decimal('10')
-        }
-        current_state = {
-            'pool': pool
-        }
         input_params = ExitPoolInput(pool_amount_in=Decimal('0.084785200842684343'))
         output_params = ExitPoolOutput(tokens_out=[
             TokenAmount.ta_with_dict({
@@ -133,31 +95,30 @@ class TestPlotOutputSystemPolicies(unittest.TestCase):
                 "symbol": "DAI"
             })
         ])
-        result_pool = s_exit_pool_plot_output(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
+        result_pool = s_exit_pool_plot_output(params={}, step=1, history={}, current_state=self.current_state, input_params=input_params,
                                               output_params=output_params)
-        self.assertAlmostEqual(result_pool['tokens']['WETH'].balance, Decimal('100') - Decimal('49.947987341742463214'))
-        self.assertAlmostEqual(result_pool['tokens']['DAI'].balance, Decimal('100') - Decimal('15583.368940028059875724'))
-        self.assertAlmostEqual(result_pool['pool_shares'], Decimal('10') - Decimal('0.084785200842684343'))
+        self.assertAlmostEqual(result_pool.tokens['WETH'].balance, Decimal('100') - Decimal('49.947987341742463214'))
+        self.assertAlmostEqual(result_pool.tokens['DAI'].balance, Decimal('100') - Decimal('15583.368940028059875724'))
+        self.assertAlmostEqual(result_pool.shares, Decimal('10') - Decimal('0.084785200842684343'))
 
 
 class TestSystemPolicies(unittest.TestCase):
-
     def test_s_swap_exact_amount_in(self):
         initial_weth_balance = Decimal('67738.636173102396002749')
         initial_dai_balance = Decimal('10000000')
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('80'), denorm_weight=Decimal('40'), balance=initial_weth_balance),
-                'DAI': Token(bound=True, weight=Decimal('20'), denorm_weight=Decimal('10'), balance=initial_dai_balance),
+        pool = Pool(
+            tokens={
+                'WETH': Token(denorm_weight=Decimal('40'), balance=initial_weth_balance, bound=True),
+                'DAI': Token(denorm_weight=Decimal('10'), balance=initial_dai_balance, bound=True),
             },
-            'generated_fees': {
+            generated_fees={
                 'WETH': Decimal('0'),
                 'DAI': Decimal('0')
             },
-            'pool_shares': Decimal('100'),
-            'swap_fee': Decimal('0.0025')
-        }
-        initial_pool = pool.copy()
+            shares=Decimal('100'),
+            swap_fee=Decimal('0.0025')
+        )
+
         current_state = {
             'pool': pool
         }
@@ -168,25 +129,24 @@ class TestSystemPolicies(unittest.TestCase):
         input_params, output_params = PoolMethodParamsDecoder.swap_exact_amount_in_simplified(action)
         answer = s_swap_exact_amount_in(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
                                         output_params=output_params)
-        self.assertAlmostEqual(answer['tokens']['DAI'].balance, initial_dai_balance + Decimal('11861.328308360999600128'))
-        self.assertAlmostEqual(answer['tokens']['WETH'].balance, initial_weth_balance - Decimal('20.021734699893455844'))
+        self.assertAlmostEqual(answer.tokens['DAI'].balance, initial_dai_balance + Decimal('11861.328308360999600128'))
+        self.assertAlmostEqual(answer.tokens['WETH'].balance, initial_weth_balance - Decimal('20.021734699893455844'))
 
     def test_s_swap_exact_amount_out_contract_call(self):
         initial_weth_balance = Decimal('67687.60745275310726724040775')
         initial_dai_balance = Decimal('10030265.38142873603805481872')
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('80'), denorm_weight=Decimal('40'), balance=initial_weth_balance),
-                'DAI': Token(bound=True, weight=Decimal('20'), denorm_weight=Decimal('10'), balance=initial_dai_balance),
+        pool = Pool(
+            tokens={
+                'WETH': Token(denorm_weight=Decimal('40'), balance=initial_weth_balance, bound=True),
+                'DAI': Token(denorm_weight=Decimal('10'), balance=initial_dai_balance, bound=True),
             },
-            'generated_fees': {
+            generated_fees={
                 'WETH': Decimal('0'),
                 'DAI': Decimal('0')
             },
-            'pool_shares': Decimal('100'),
-            'swap_fee': Decimal('0.0025')
-        }
-        initial_pool = pool.copy()
+            shares=Decimal('100'),
+            swap_fee=Decimal('0.0025')
+        )
         current_state = {
             'pool': pool
         }
@@ -201,24 +161,24 @@ class TestSystemPolicies(unittest.TestCase):
         input_params, output_params = PoolMethodParamsDecoder.swap_exact_amount_out_contract_call(action, contract_call)
         answer = s_swap_exact_amount_out(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
                                          output_params=output_params)
-        self.assertAlmostEqual(answer['tokens']['DAI'].balance, initial_dai_balance - Decimal('2090.162720553097945277'))
-        self.assertAlmostEqual(answer['tokens']['WETH'].balance, initial_weth_balance + Decimal('3.535578706148314394'))
+        self.assertAlmostEqual(answer.tokens['DAI'].balance, initial_dai_balance - Decimal('2090.162720553097945277'))
+        self.assertAlmostEqual(answer.tokens['WETH'].balance, initial_weth_balance + Decimal('3.535578706148314394'))
 
     def test_s_join_swap_extern_amount_in(self):
         initial_weth_balance = Decimal('67958.94737692815116931411425')
         initial_dai_balance = Decimal('9872549.777138279249980148442')
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('0.1'), denorm_weight=Decimal('40'), balance=initial_weth_balance),
-                'DAI': Token(bound=True, weight=Decimal('0.4'), denorm_weight=Decimal('10'), balance=initial_dai_balance),
+        pool = Pool(
+            tokens={
+                'WETH': Token(denorm_weight=Decimal('40'), balance=initial_weth_balance, bound=True),
+                'DAI': Token(denorm_weight=Decimal('10'), balance=initial_dai_balance, bound=True),
             },
-            'generated_fees': {
+            generated_fees={
                 'WETH': Decimal('0'),
                 'DAI': Decimal('0')
             },
-            'pool_shares': Decimal('100'),
-            'swap_fee': Decimal('0.0025')
-        }
+            shares=Decimal('100'),
+            swap_fee=Decimal('0.0025')
+        )
         current_state = {
             'pool': pool
         }
@@ -229,24 +189,24 @@ class TestSystemPolicies(unittest.TestCase):
         print(output_params)
         answer = s_join_swap_extern_amount_in(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
                                               output_params=output_params)
-        self.assertAlmostEqual(answer['tokens']['WETH'].balance, initial_weth_balance + Decimal('26.741601415598676064'))
-        self.assertAlmostEqual(answer['pool_shares'], Decimal('100') + Decimal('0.0314627351852568'))
+        self.assertAlmostEqual(answer.tokens['WETH'].balance, initial_weth_balance + Decimal('26.741601415598676064'))
+        self.assertAlmostEqual(answer.shares, Decimal('100') + Decimal('0.0314627351852568'))
 
     def test_s_join_swap_extern_amount_in_contract_call(self):
         initial_weth_balance = Decimal('67958.94737692815116931411425')
         initial_dai_balance = Decimal('9872549.777138279249980148442')
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('0.1'), denorm_weight=Decimal('40'), balance=initial_weth_balance),
-                'DAI': Token(bound=True, weight=Decimal('0.4'), denorm_weight=Decimal('10'), balance=initial_dai_balance),
+        pool = Pool(
+            tokens={
+                'WETH': Token(denorm_weight=Decimal('40'), balance=initial_weth_balance, bound=True),
+                'DAI': Token(denorm_weight=Decimal('10'), balance=initial_dai_balance, bound=True),
             },
-            'generated_fees': {
+            generated_fees={
                 'WETH': Decimal('0'),
                 'DAI': Decimal('0')
             },
-            'pool_shares': Decimal('100'),
-            'swap_fee': Decimal('0.0025')
-        }
+            shares=Decimal('100'),
+            swap_fee=Decimal('0.0025')
+        )
         current_state = {
             'pool': pool
         }
@@ -261,25 +221,25 @@ class TestSystemPolicies(unittest.TestCase):
         print(output_params)
         answer = s_join_swap_extern_amount_in(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
                                               output_params=output_params)
-        self.assertAlmostEqual(answer['tokens']['WETH'].balance, initial_weth_balance + Decimal('26.741601415598676064'))
-        self.assertAlmostEqual(answer['pool_shares'], Decimal('100') + Decimal('0.0314627351852568'))
+        self.assertAlmostEqual(answer.tokens['WETH'].balance, initial_weth_balance + Decimal('26.741601415598676064'))
+        self.assertAlmostEqual(answer.shares, Decimal('100') + Decimal('0.0314627351852568'))
 
     def test_s_join_pool_simplified(self):
         initial_weth_balance = Decimal('67754.45880861386396117576576')
         initial_dai_balance = Decimal('10016378.43379686305875979834')
         initial_pool_shares = Decimal('100.0035090123482194137033160')
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('0.1'), denorm_weight=Decimal('40'), balance=initial_weth_balance),
-                'DAI': Token(bound=True, weight=Decimal('0.4'), denorm_weight=Decimal('10'), balance=initial_dai_balance),
+        pool = Pool(
+            tokens={
+                'WETH': Token(denorm_weight=Decimal('40'), balance=initial_weth_balance, bound=True),
+                'DAI': Token(denorm_weight=Decimal('10'), balance=initial_dai_balance, bound=True),
             },
-            'generated_fees': {
+            generated_fees={
                 'WETH': Decimal('0'),
                 'DAI': Decimal('0')
             },
-            'pool_shares': initial_pool_shares,
-            'swap_fee': Decimal('0.0025')
-        }
+            shares=initial_pool_shares,
+            swap_fee=Decimal('0.0025')
+        )
         current_state = {
             'pool': pool
         }
@@ -290,26 +250,26 @@ class TestSystemPolicies(unittest.TestCase):
         input_params, output_params = PoolMethodParamsDecoder.join_pool_simplified(action)
         answer = s_join_pool(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
                              output_params=output_params)
-        self.assertAlmostEqual(answer['tokens']['WETH'].balance, initial_weth_balance + Decimal('0.019993601301505542'), 5)
-        self.assertAlmostEqual(answer['tokens']['DAI'].balance, initial_dai_balance + Decimal('2.954876765664920082'), 2)
-        self.assertAlmostEqual(answer['pool_shares'], initial_pool_shares + Decimal('0.000029508254125206'), 5)
+        self.assertAlmostEqual(answer.tokens['WETH'].balance, initial_weth_balance + Decimal('0.019993601301505542'), 5)
+        self.assertAlmostEqual(answer.tokens['DAI'].balance, initial_dai_balance + Decimal('2.954876765664920082'), 2)
+        self.assertAlmostEqual(answer.shares, initial_pool_shares + Decimal('0.000029508254125206'), 5)
 
     def test_s_join_pool_simplified_contract_call(self):
         initial_weth_balance = Decimal('67754.45880861386396117576576')
         initial_dai_balance = Decimal('10016378.43379686305875979834')
         initial_pool_shares = Decimal('100.0035090123482194137033160')
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('0.1'), denorm_weight=Decimal('40'), balance=initial_weth_balance),
-                'DAI': Token(bound=True, weight=Decimal('0.4'), denorm_weight=Decimal('10'), balance=initial_dai_balance),
+        pool = Pool(
+            tokens={
+                'WETH': Token(denorm_weight=Decimal('40'), balance=initial_weth_balance, bound=True),
+                'DAI': Token(denorm_weight=Decimal('10'), balance=initial_dai_balance, bound=True),
             },
-            'generated_fees': {
+            generated_fees={
                 'WETH': Decimal('0'),
                 'DAI': Decimal('0')
             },
-            'pool_shares': initial_pool_shares,
-            'swap_fee': Decimal('0.0025')
-        }
+            shares=initial_pool_shares,
+            swap_fee=Decimal('0.0025')
+        )
         current_state = {
             'pool': pool
         }
@@ -320,26 +280,26 @@ class TestSystemPolicies(unittest.TestCase):
         input_params, output_params = PoolMethodParamsDecoder.join_pool_contract_call(action, contract_call)
         answer = s_join_pool(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
                              output_params=output_params)
-        self.assertAlmostEqual(answer['tokens']['WETH'].balance, initial_weth_balance + Decimal('0.019993601301505542'), 5)
-        self.assertAlmostEqual(answer['tokens']['DAI'].balance, initial_dai_balance + Decimal('2.954876765664920082'), 2)
-        self.assertAlmostEqual(answer['pool_shares'], initial_pool_shares + Decimal('0.000029508254125206'), 5)
+        self.assertAlmostEqual(answer.tokens['WETH'].balance, initial_weth_balance + Decimal('0.019993601301505542'), 5)
+        self.assertAlmostEqual(answer.tokens['DAI'].balance, initial_dai_balance + Decimal('2.954876765664920082'), 2)
+        self.assertAlmostEqual(answer.shares, initial_pool_shares + Decimal('0.000029508254125206'), 5)
 
     def test_s_exit_swap_pool_amount_in_simplified(self):
         initial_weth_balance = Decimal('68804.59546436957187327149066')
         initial_dai_balance = Decimal('9415058.959645000758262408416')
         initial_pool_shares = Decimal('100.0314627351852321785331753')
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('0.1'), denorm_weight=Decimal('40'), balance=initial_weth_balance),
-                'DAI': Token(bound=True, weight=Decimal('0.4'), denorm_weight=Decimal('10'), balance=initial_dai_balance),
+        pool = Pool(
+            tokens={
+                'WETH': Token(denorm_weight=Decimal('40'), balance=initial_weth_balance, bound=True),
+                'DAI': Token(denorm_weight=Decimal('10'), balance=initial_dai_balance, bound=True),
             },
-            'generated_fees': {
+            generated_fees={
                 'WETH': Decimal('0'),
                 'DAI': Decimal('0')
             },
-            'pool_shares': initial_pool_shares,
-            'swap_fee': Decimal('0.0025')
-        }
+            shares=initial_pool_shares,
+            swap_fee=Decimal('0.0025')
+        )
         current_state = {
             'pool': pool
         }
@@ -347,25 +307,25 @@ class TestSystemPolicies(unittest.TestCase):
         input_params, output_params = PoolMethodParamsDecoder.exit_swap_pool_amount_in_simplified(action)
         answer = s_exit_swap_pool_amount_in(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
                                             output_params=output_params)
-        self.assertAlmostEqual(answer['tokens']['WETH'].balance, initial_weth_balance - Decimal('27.036668416618733348'), 4)
-        self.assertAlmostEqual(answer['pool_shares'], initial_pool_shares - Decimal('0.0314627351852568'))
+        self.assertAlmostEqual(answer.tokens['WETH'].balance, initial_weth_balance - Decimal('27.036668416618733348'), 4)
+        self.assertAlmostEqual(answer.shares, initial_pool_shares - Decimal('0.0314627351852568'))
 
     def test_s_exit_swap_pool_amount_in_contract_call(self):
         initial_weth_balance = Decimal('68804.59546436957187327149066')
         initial_dai_balance = Decimal('9415058.959645000758262408416')
         initial_pool_shares = Decimal('100.0314627351852321785331753')
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('0.1'), denorm_weight=Decimal('40'), balance=initial_weth_balance),
-                'DAI': Token(bound=True, weight=Decimal('0.4'), denorm_weight=Decimal('10'), balance=initial_dai_balance),
+        pool = Pool(
+            tokens={
+                'WETH': Token(denorm_weight=Decimal('40'), balance=initial_weth_balance, bound=True),
+                'DAI': Token(denorm_weight=Decimal('10'), balance=initial_dai_balance, bound=True),
             },
-            'generated_fees': {
+            generated_fees={
                 'WETH': Decimal('0'),
                 'DAI': Decimal('0')
             },
-            'pool_shares': initial_pool_shares,
-            'swap_fee': Decimal('0.0025')
-        }
+            shares=initial_pool_shares,
+            swap_fee=Decimal('0.0025')
+        )
         current_state = {
             'pool': pool
         }
@@ -378,25 +338,25 @@ class TestSystemPolicies(unittest.TestCase):
         input_params, output_params = PoolMethodParamsDecoder.exit_swap_pool_amount_in_contract_call(action, contract_call)
         answer = s_exit_swap_pool_amount_in(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
                                             output_params=output_params)
-        self.assertAlmostEqual(answer['tokens']['WETH'].balance, initial_weth_balance - Decimal('27.036668416618733348'), 4)
-        self.assertAlmostEqual(answer['pool_shares'], initial_pool_shares - Decimal('0.0314627351852568'))
+        self.assertAlmostEqual(answer.tokens['WETH'].balance, initial_weth_balance - Decimal('27.036668416618733348'), 4)
+        self.assertAlmostEqual(answer.shares, initial_pool_shares - Decimal('0.0314627351852568'))
 
     def test_s_exit_pool_simpl(self):
         initial_weth_balance = Decimal('67180.99053842917941285506345')
         initial_dai_balance = Decimal('10439411.60763212320360230771')
         initial_pool_shares = Decimal('100.0103783872866677807449608')
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('0.1'), denorm_weight=Decimal('40'), balance=initial_weth_balance),
-                'DAI': Token(bound=True, weight=Decimal('0.4'), denorm_weight=Decimal('10'), balance=initial_dai_balance),
+        pool = Pool(
+            tokens={
+                'WETH': Token(denorm_weight=Decimal('40'), balance=initial_weth_balance, bound=True),
+                'DAI': Token(denorm_weight=Decimal('10'), balance=initial_dai_balance, bound=True),
             },
-            'generated_fees': {
+            generated_fees={
                 'WETH': Decimal('0'),
                 'DAI': Decimal('0')
             },
-            'pool_shares': initial_pool_shares,
-            'swap_fee': Decimal('0.0025')
-        }
+            shares=initial_pool_shares,
+            swap_fee=Decimal('0.0025')
+        )
         current_state = {
             'pool': pool
         }
@@ -406,26 +366,26 @@ class TestSystemPolicies(unittest.TestCase):
         input_params, output_params = PoolMethodParamsDecoder.exit_pool_simplified(action)
         answer = s_exit_pool(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
                                             output_params=output_params)
-        self.assertAlmostEqual(answer['tokens']['WETH'].balance, initial_weth_balance - Decimal('0.800443097642618074'), 4)
-        self.assertAlmostEqual(answer['tokens']['DAI'].balance, initial_dai_balance - Decimal('124.378005824396584765'), 2)
-        self.assertAlmostEqual(answer['pool_shares'], initial_pool_shares - Decimal('0.001191587214967108'))
+        self.assertAlmostEqual(answer.tokens['WETH'].balance, initial_weth_balance - Decimal('0.800443097642618074'), 4)
+        self.assertAlmostEqual(answer.tokens['DAI'].balance, initial_dai_balance - Decimal('124.378005824396584765'), 2)
+        self.assertAlmostEqual(answer.shares, initial_pool_shares - Decimal('0.001191587214967108'))
 
     def test_s_exit_pool_contract_call(self):
         initial_weth_balance = Decimal('67180.99053842917941285506345')
         initial_dai_balance = Decimal('10439411.60763212320360230771')
         initial_pool_shares = Decimal('100.0103783872866677807449608')
-        pool = {
-            'tokens': {
-                'WETH': Token(bound=True, weight=Decimal('0.1'), denorm_weight=Decimal('40'), balance=initial_weth_balance),
-                'DAI': Token(bound=True, weight=Decimal('0.4'), denorm_weight=Decimal('10'), balance=initial_dai_balance),
+        pool = Pool(
+            tokens={
+                'WETH': Token(denorm_weight=Decimal('40'), balance=initial_weth_balance, bound=True),
+                'DAI': Token(denorm_weight=Decimal('10'), balance=initial_dai_balance, bound=True),
             },
-            'generated_fees': {
+            generated_fees={
                 'WETH': Decimal('0'),
                 'DAI': Decimal('0')
             },
-            'pool_shares': initial_pool_shares,
-            'swap_fee': Decimal('0.0025')
-        }
+            shares=initial_pool_shares,
+            swap_fee=Decimal('0.0025')
+        )
         current_state = {
             'pool': pool
         }
@@ -436,9 +396,9 @@ class TestSystemPolicies(unittest.TestCase):
         input_params, output_params = PoolMethodParamsDecoder.exit_pool_contract_call(action, contract_call)
         answer = s_exit_pool(params={}, step=1, history={}, current_state=current_state, input_params=input_params,
                                             output_params=output_params)
-        self.assertAlmostEqual(answer['tokens']['WETH'].balance, initial_weth_balance - Decimal('0.800443097642618074'), 4)
-        self.assertAlmostEqual(answer['tokens']['DAI'].balance, initial_dai_balance - Decimal('124.378005824396584765'), 2)
-        self.assertAlmostEqual(answer['pool_shares'], initial_pool_shares - Decimal('0.001191587214967108'))
+        self.assertAlmostEqual(answer.tokens['WETH'].balance, initial_weth_balance - Decimal('0.800443097642618074'), 4)
+        self.assertAlmostEqual(answer.tokens['DAI'].balance, initial_dai_balance - Decimal('124.378005824396584765'), 2)
+        self.assertAlmostEqual(answer.shares, initial_pool_shares - Decimal('0.001191587214967108'))
 
 if __name__ == '__main__':
     unittest.main()
