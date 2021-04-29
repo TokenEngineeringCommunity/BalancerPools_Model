@@ -1,6 +1,14 @@
 import pandas as pd
 import typing
 
+def get_param(params: typing.Dict, key: str):
+    # When only 1 param this happens
+    if isinstance(params, list):
+        # 1 param
+        return params[0][key]
+    else:
+        # Parameter sweep
+        return params[key]
 
 def unpack_column_tokens(column_tokens: pd.Series, token_symbols: typing.List[str]) -> pd.DataFrame:
     di = {}
