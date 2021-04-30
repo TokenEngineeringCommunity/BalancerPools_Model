@@ -11,7 +11,7 @@ from model.parts.balancer_math import BalancerMath
 from model.parts.pool_method_entities import SwapExactAmountInInput, SwapExactAmountInOutput, TokenAmount
 
 MAX_DECIMAL = Context(Emax=MAX_EMAX, prec=1).create_decimal('9e' + str(MAX_EMAX))
-VERBOSE = False
+VERBOSE = True
 
 
 def print_if_verbose(text: any, *args):
@@ -29,7 +29,6 @@ class PotentialArbTrade:
     transaction_cost: Decimal
     profit: Decimal
 
-
 def calculate_optimal_trade_size(params, current_state, token_in, token_out, external_token_prices, potential_trades):
     max_arb_liquidity = params[0]['max_arb_liquidity']  # usd
     min_arb_liquidity = params[0]['min_arb_liquidity']  # usd
@@ -43,7 +42,7 @@ def calculate_optimal_trade_size(params, current_state, token_in, token_out, ext
         # 1000 usd to amount_in using external price
         # a_o  = out_given_in
         # a_o_us = a_o converted to external price
-        # profit = a_o_us - cost 
+        # profit = a_o_us - cost
         # add to potential_trades
         # sort by biggest profit
         # select biggest profit && profit >= gas cost
@@ -80,9 +79,11 @@ def p_arbitrageur(params, step, history, current_state):
     external_currency = params[0]['external_currency']
     potential_trades = []
     print_if_verbose('============================================')
+    print_if_verbose(pool)
     # token in : token_in
     external_token_prices = dict((k, Decimal(v)) for k, v in current_state['token_prices'].items())
     for token_in in spot_prices.keys():
+        # import ipdb; ipdb.set_trace()
         print_if_verbose('token_in', token_in)
         for token_out in spot_prices[token_in].keys():
             print_if_verbose('token_out', token_out)
