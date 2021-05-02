@@ -83,11 +83,10 @@ def p_arbitrageur(params, step, history, current_state):
     # token in : token_in
     external_token_prices = dict((k, Decimal(v)) for k, v in current_state['token_prices'].items())
     for token_in in spot_prices.keys():
-        # import ipdb; ipdb.set_trace()
         print_if_verbose('token_in', token_in)
         for token_out in spot_prices[token_in].keys():
             print_if_verbose('token_out', token_out)
-            spot_price_token_in = spot_prices[token_in][token_out]
+            spot_price_token_in = spot_prices[token_out][token_in]
             print_if_verbose(f'spot price: 1 {token_in} = {spot_price_token_in} {token_out}', )
             print_if_verbose(f'external price token in: 1{token_in} = {external_token_prices[token_in]} {external_currency}')
             print_if_verbose(f'external price token out: 1{token_out} = {external_token_prices[token_out]} {external_currency}')
