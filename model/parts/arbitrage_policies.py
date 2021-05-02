@@ -73,7 +73,7 @@ def calculate_optimal_trade_size(params, current_state, token_in, token_out, ext
         ))
 
 
-def p_arbitrageur(params, step, history, current_state):
+def p_arbitrageur(params, substep, history, current_state):
     pool = current_state['pool']
     spot_prices = current_state['spot_prices']
     external_currency = params[0]['external_currency']
