@@ -79,8 +79,8 @@ def p_arbitrageur(params, substep, history, current_state):
     external_currency = params[0]['external_currency']
     potential_trades = []
     print_if_verbose('============================================')
-    print_if_verbose(pool)
-    # token in : token_in
+    print_if_verbose("Timestep", current_state['timestep'], pool)
+    # import ipdb; ipdb.set_trace()
     external_token_prices = dict((k, Decimal(v)) for k, v in current_state['token_prices'].items())
     for token_in in spot_prices.keys():
         print_if_verbose('token_in', token_in)
@@ -96,7 +96,7 @@ def p_arbitrageur(params, substep, history, current_state):
             print_if_verbose(f'{spot_price_token_in_external_currency} < {external_token_prices[token_in]}')
             if spot_price_token_in_external_currency < external_token_prices[token_in]:
                 print_if_verbose('possible trade')
-                calculate_optimal_trade_size(params, current_state, token_in, token_out, external_token_prices, potential_trades)
+                calculate_optimal_trade_size(params, current_state, token_out, token_in, external_token_prices, potential_trades)
             else:
                 print_if_verbose('no trade')
     # Sort by profitERR_MAX_IN_RATIO

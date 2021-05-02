@@ -29,7 +29,6 @@ def generate_partial_state_update_blocks(path_to_action_json: str, add_arbitrage
         blocks['partial_state_update_blocks'].append({
             'policies': {
                 'arbitrage': p_arbitrageur,
-
             },
             'variables': {
                 'pool': s_update_pool,
@@ -38,4 +37,3 @@ def generate_partial_state_update_blocks(path_to_action_json: str, add_arbitrage
             }
         })
     return blocks
-
