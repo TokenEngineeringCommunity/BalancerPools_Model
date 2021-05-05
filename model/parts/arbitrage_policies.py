@@ -34,6 +34,42 @@ class PotentialArbTrade:
     transaction_cost: Decimal
     profit: Decimal
 
+class PriceOracle:
+    """
+    This class decouples logic code from the dict structure of spot_prices,
+    external_prices and hopefully provide a more convenient interface to look
+    up prices of tokens in various denominations
+    """
+    def __init__(self, token_count, spot_prices, external_currency, external_prices):
+        self._token_count = token_count
+
+        if len(spot_prices) != self._token_count:
+            raise ValueError("spot_prices dict must contain data for {self._token_count} tokens")
+        token_count_minus_1 = self._token_count - 1
+        for v in spot_prices.values():
+            if len(v) != (token_count_minus_1):
+                raise ValueError("each token must have its spot price expressed in {token_count_minus_1} other tokens")
+        self.spot_prices = spot_prices
+
+        if len(external_prices) != self._token_count:
+            raise ValueError("external prices must contain data for {self._token_count} tokens")
+        self.external_currency = external_currency
+        self.external_prices = external_prices
+
+    def lookup(self, a):
+        """
+        Returns the value of a such that 1 a = [13 b, 50 c, 0.3 d...]
+        """
+        symbol_in_other_currencies = self.spot_prices[a]
+        return [TokenAmount(symbol=k, amount=1/v) for k, v in symbol_in_other_currencies.items()]
+
+    def external_price(self, a):
+        """
+        Returns the value of a such that 1 a = 30 external_currency
+        """
+        return TokenAmount(symbol=self.external_currency, amount=self.external_prices[a])
+
+
 def calculate_optimal_trade_size(params, current_state, token_in, token_out, external_token_prices, potential_trades):
     max_arb_liquidity = params[0]['max_arb_liquidity']  # usd
     min_arb_liquidity = params[0]['min_arb_liquidity']  # usd
@@ -87,25 +123,25 @@ def in_external_currency(i: typing.Dict, external_token_prices: typing.Dict) -> 
         i[k] = (1 / i[k]) * external_token_prices[k]
     return i
 
-def find_profitable_trade_route(spot_prices, external_currency, external_token_prices) -> typing.List[typing.Tuple]:
+def find_profitable_trade_route(tokens: typing.List, oracle: PriceOracle) -> typing.List[typing.Tuple]:
     """
-    Input parameter examples:
-    spot_prices: {'AAVE': {'SNX': Decimal('0.0785761'), 'SUSHI': Decimal('0.0372485'), 'YFI': Decimal('170.813')}, 'SNX': {'AAVE': Decimal('12.7903'), 'SUSHI': Decimal('0.475231'), 'YFI': Decimal('2179.31')}, 'SUSHI': {'AAVE': Decimal('26.9814'), 'SNX': Decimal('2.11479'), 'YFI': Decimal('4597.28')}, 'YFI': {'AAVE': Decimal('0.00588370'), 'SNX': Decimal('0.000461163'), 'SUSHI': Decimal('0.000218611')}}
-    external_currency: 'USDT'
-    external_token_prices: {'AAVE': Decimal('178.0310000000000059117155'), 'SNX': Decimal('13.455000000000000071054273576'), 'SUSHI': Decimal('6.458000000000000184741111297')}
-
     x is token_in! You go into the pool with this token (which is supposed to
     be cheaper on the external markets) and come out with this other token
     (which has more value)
     """
     x_spot_price_cheaper_than_external_price = []
-    for x, x_spot_price_in_others in spot_prices.items():
-        x_in_external_currency = external_token_prices[x]
-        x_spot_price_in_others_in_external_currency = in_external_currency(x_spot_price_in_others, external_token_prices)
-        print_if_verbose(f'1 {x} (token_in) is ~{x_in_external_currency:.2f} {external_currency} on external markets, can come out via {x_spot_price_in_others_in_external_currency} {external_currency} (token_out)')
+    for x in tokens:
+        # Build a dict of all the possible routes. For each token_in, there are
+        # (total tokens - 1) routes out of the pool, and depending on their
+        # external prices, we might end up with different amounts of value (as
+        # denoted in external_currency).
+        x_in_other_currencies = oracle.lookup(x)
+        x_external_price = oracle.external_price(x)
+        x_spot_price_in_others_in_external_currency = {x_in_other.symbol: x_in_other * oracle.external_price(x_in_other.symbol) for x_in_other in x_in_other_currencies}
+        print_if_verbose(f'1 {x} (token_in) is ~{x_external_price} on external markets, can come out via {x_spot_price_in_others_in_external_currency} (token_out)')
 
         # if the pool has a cheap token (in external_currency) which can be sold outside for higher price, take note of it
-        cheaper_than_external_price = [(PotentialArbTradeLite(token_in=x, token_out=token_out_symbol), x_in_external_currency / token_out_in_external_currency) for token_out_symbol, token_out_in_external_currency in x_spot_price_in_others_in_external_currency.items() if x_in_external_currency < token_out_in_external_currency]
+        cheaper_than_external_price = [(PotentialArbTradeLite(token_in=x, token_out=token_out_symbol), float(x_external_price.amount / token_out_in_external_currency.amount)) for token_out_symbol, token_out_in_external_currency in x_spot_price_in_others_in_external_currency.items() if x_external_price < token_out_in_external_currency]
 
         x_spot_price_cheaper_than_external_price.extend(cheaper_than_external_price)
     x_spot_price_cheaper_than_external_price = sorted(x_spot_price_cheaper_than_external_price, key=itemgetter(1))
@@ -121,7 +157,8 @@ def p_arbitrageur(params, substep, history, current_state):
     print_if_verbose("Timestep", current_state['timestep'], pool)
     external_token_prices = dict((k, Decimal(v)) for k, v in current_state['token_prices'].items())
 
-    x_spot_price_cheaper_than_external_price = find_profitable_trade_route(spot_prices, external_currency, external_token_prices)
+    oracle = PriceOracle(len(pool.tokens), spot_prices, external_currency, external_token_prices)
+    x_spot_price_cheaper_than_external_price = find_profitable_trade_route(pool.tokens.keys(), oracle)
 
     print_if_verbose("calculating optimal trade size")
     if not len(x_spot_price_cheaper_than_external_price):
@@ -152,7 +189,7 @@ def p_arbitrageur(params, substep, history, current_state):
     ))
 
     swap_output = SwapExactAmountInOutput(token_out=TokenAmount(amount=most_profitable_trade.token_amount_out, symbol=most_profitable_trade.token_out))
-    # print_if_verbose(swap_input, swap_output)
+    print_if_verbose(swap_input, swap_output)
     # add 15 seconds, more or less next block
     action_datetime = current_state['change_datetime'] + timedelta(0, 15)
     return {

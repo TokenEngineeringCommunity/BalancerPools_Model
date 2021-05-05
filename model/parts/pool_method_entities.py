@@ -3,7 +3,7 @@ from decimal import Decimal
 from attr import dataclass
 
 
-@dataclass
+@dataclass(repr=False)
 class TokenAmount:
     symbol: str
     amount: Decimal
@@ -12,7 +12,14 @@ class TokenAmount:
     def ta_with_dict(token_dict):
         return TokenAmount(symbol=token_dict['symbol'], amount=Decimal(token_dict['amount']))
 
+    def __repr__(self):
+        return f'{self.amount:.5f}... {self.symbol}'
 
+    def __mul__(self, other):
+        if not isinstance(other, TokenAmount):
+            raise ValueError("Other must be a TokenAmount as well")
+        amount_new = self.amount * other.amount
+        return TokenAmount(symbol=other.symbol, amount=amount_new)
 @dataclass
 class JoinParamsInput:
     pool_amount_out: Decimal
