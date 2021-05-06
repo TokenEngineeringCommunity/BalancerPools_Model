@@ -34,6 +34,16 @@ class PotentialArbTrade:
     transaction_cost: Decimal
     profit: Decimal
 
+@dataclass
+class PotentialArbTradeIteration:
+    liquidity_in: TokenAmount
+    token_in: TokenAmount
+    token_out: TokenAmount
+    effective_token_out_price_in_external_currency: TokenAmount
+    effective_token_out_price_gap_to_external_price: TokenAmount
+    tx_cost_in_external_currency: TokenAmount
+    profit: TokenAmount
+
 class PriceOracle:
     """
     This class decouples logic code from the dict structure of spot_prices,
@@ -70,26 +80,21 @@ class PriceOracle:
         return TokenAmount(symbol=self.external_currency, amount=self.external_prices[a])
 
 
-def calculate_optimal_trade_size(params, current_state, token_in, token_out, external_token_prices, potential_trades):
-    max_arb_liquidity = params[0]['max_arb_liquidity']  # usd
-    min_arb_liquidity = params[0]['min_arb_liquidity']  # usd
-    arb_liquidity_granularity = params[0]['arb_liquidity_granularity']  # usd
-    transaction_cost = current_state['gas_cost']
-    pool = current_state['pool']
+def calculate_optimal_trade_size(pool, min_arb_liquidity, max_arb_liquidity, arb_liquidity_granularity, tx_cost_in_external_currency, token_in, token_out, external_currency, external_token_prices):
     pool_token_in = pool.tokens[token_in]
     pool_token_out = pool.tokens[token_out]
-    for arb_liq in range(min_arb_liquidity, max_arb_liquidity, arb_liquidity_granularity):
+    arb_iterations = []
+    for arb_liq_in_external_currency in range(min_arb_liquidity, max_arb_liquidity, arb_liquidity_granularity):
         # 1000 usd
         # 1000 usd to amount_in using external price
         # a_o  = out_given_in
         # a_o_us = a_o converted to external price
         # profit = a_o_us - cost
-        # add to potential_trades
+        # add to arb_iterations
         # sort by biggest profit
         # select biggest profit && profit >= gas cost
-        # print('Arb liq', arb_liq)
-        token_amount_in = external_token_prices[token_in] * Decimal(arb_liq)
-        # print('token_amount_in', token_amount_in)
+
+        token_amount_in = Decimal(arb_liq_in_external_currency) / external_token_prices[token_in]
         swap_result = BalancerMath.calc_out_given_in(
             token_balance_in=pool_token_in.balance,
             token_weight_in=Decimal(pool_token_in.denorm_weight),
@@ -98,20 +103,21 @@ def calculate_optimal_trade_size(params, current_state, token_in, token_out, ext
             token_amount_in=token_amount_in,
             swap_fee=pool.swap_fee
         )
-        # print('token_amount_out', swap_result.result)
-        amount_out_external_price = external_token_prices[token_out] * swap_result.result
-        # print('amount_out_external_price', amount_out_external_price)
-        profit = amount_out_external_price - transaction_cost
-        # print('profit', profit)
-        potential_trades.append(PotentialArbTrade(
-            token_in=token_in,
-            token_amount_in=token_amount_in,
-            liquidity_in=Decimal(arb_liq),
-            token_out=token_out,
-            token_amount_out=swap_result.result,
-            transaction_cost=transaction_cost,
-            profit=profit
+        effective_token_out_price_in_external_currency = (token_amount_in / swap_result.result) * external_token_prices[token_in]
+        effective_token_out_price_gap_to_external_price = external_token_prices[token_out] - effective_token_out_price_in_external_currency
+        profit = effective_token_out_price_gap_to_external_price * swap_result.result - tx_cost_in_external_currency
+        print_if_verbose(f'Used {arb_liq_in_external_currency} {external_currency} to buy {token_amount_in:.4f} {token_in} in external markets (no slippage). Put {token_amount_in:.4f} {token_in}, got {swap_result.result:.4f} {token_out} from pool for an effective price of {effective_token_out_price_in_external_currency:.4f} {external_currency} (diff. between external price and effective price from pool: {effective_token_out_price_gap_to_external_price:.4f}) Profit: {profit:.2f} {external_currency}')
+
+        arb_iterations.append(PotentialArbTradeIteration(
+            liquidity_in=TokenAmount(symbol=external_currency, amount=arb_liq_in_external_currency),
+            token_in=TokenAmount(symbol=token_in, amount=token_amount_in),
+            token_out=TokenAmount(symbol=token_out, amount=swap_result.result),
+            effective_token_out_price_in_external_currency=TokenAmount(symbol=external_currency, amount=effective_token_out_price_in_external_currency),
+            effective_token_out_price_gap_to_external_price=TokenAmount(symbol=external_currency, amount=effective_token_out_price_gap_to_external_price),
+            tx_cost_in_external_currency=TokenAmount(symbol=external_currency, amount=tx_cost_in_external_currency),
+            profit=TokenAmount(symbol=external_currency, amount=profit),
         ))
+    return arb_iterations
 
 def in_external_currency(i: typing.Dict, external_token_prices: typing.Dict) -> typing.Dict:
     """
@@ -123,7 +129,7 @@ def in_external_currency(i: typing.Dict, external_token_prices: typing.Dict) -> 
         i[k] = (1 / i[k]) * external_token_prices[k]
     return i
 
-def find_profitable_trade_route(tokens: typing.List, oracle: PriceOracle) -> typing.List[typing.Tuple]:
+def find_largest_spot_price_external_price_gap(tokens: typing.List, oracle: PriceOracle) -> typing.List[typing.Tuple]:
     """
     x is token_in! You go into the pool with this token (which is supposed to
     be cheaper on the external markets) and come out with this other token
@@ -145,20 +151,19 @@ def find_profitable_trade_route(tokens: typing.List, oracle: PriceOracle) -> typ
 
         x_spot_price_cheaper_than_external_price.extend(cheaper_than_external_price)
     x_spot_price_cheaper_than_external_price = sorted(x_spot_price_cheaper_than_external_price, key=itemgetter(1))
-    # print_if_verbose("tokens whose spot price is cheaper than external price", x_spot_price_cheaper_than_external_price)
+    print_if_verbose("tokens whose spot price is cheaper than external price", x_spot_price_cheaper_than_external_price)
     return x_spot_price_cheaper_than_external_price
 
 def p_arbitrageur(params, substep, history, current_state):
     pool = current_state['pool']
     spot_prices = current_state['spot_prices']
     external_currency = params[0]['external_currency']
-    potential_trades = []
     print_if_verbose('============================================')
     print_if_verbose("Timestep", current_state['timestep'], pool)
     external_token_prices = dict((k, Decimal(v)) for k, v in current_state['token_prices'].items())
 
     oracle = PriceOracle(len(pool.tokens), spot_prices, external_currency, external_token_prices)
-    x_spot_price_cheaper_than_external_price = find_profitable_trade_route(pool.tokens.keys(), oracle)
+    x_spot_price_cheaper_than_external_price = find_largest_spot_price_external_price_gap(pool.tokens.keys(), oracle)
 
     print_if_verbose("calculating optimal trade size")
     if not len(x_spot_price_cheaper_than_external_price):
@@ -167,7 +172,7 @@ def p_arbitrageur(params, substep, history, current_state):
             'pool_update': None}
 
     the_trade = x_spot_price_cheaper_than_external_price[0][0]
-    calculate_optimal_trade_size(params, current_state, the_trade.token_in, the_trade.token_out, external_token_prices, potential_trades)
+    potential_trades = calculate_optimal_trade_size(pool, params[0]['min_arb_liquidity'], params[0]['max_arb_liquidity'], params[0]['arb_liquidity_granularity'], current_state['gas_cost'], the_trade.token_in, the_trade.token_out, external_currency, external_token_prices)
     potential_trades = sorted(potential_trades, key=attrgetter('profit'), reverse=True)
     if not len(potential_trades):
         print_if_verbose('no trade')
