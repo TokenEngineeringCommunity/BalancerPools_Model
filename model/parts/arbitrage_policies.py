@@ -35,7 +35,7 @@ class PotentialArbTrade:
     profit: Decimal
 
 @dataclass
-class PotentialArbTradeIteration:
+class ArbTradeEvaluation:
     liquidity_in: TokenAmount
     token_in: TokenAmount
     token_out: TokenAmount
@@ -43,6 +43,15 @@ class PotentialArbTradeIteration:
     effective_token_out_price_gap_to_external_price: TokenAmount
     tx_cost_in_external_currency: TokenAmount
     profit: TokenAmount
+
+@dataclass
+class ExternalPrices:
+    """
+    I just want to have external prices and their unit together in the same
+    object!
+    """
+    symbol: str
+    external_prices: dict
 
 class PriceOracle:
     """
@@ -80,7 +89,7 @@ class PriceOracle:
         return TokenAmount(symbol=self.external_currency, amount=self.external_prices[a])
 
 
-def calculate_optimal_trade_size(pool, min_arb_liquidity, max_arb_liquidity, arb_liquidity_granularity, tx_cost_in_external_currency, token_in, token_out, external_currency, external_token_prices):
+def calculate_optimal_trade_size(pool, min_arb_liquidity, max_arb_liquidity, arb_liquidity_granularity, tx_cost_in_external_currency, token_in, token_out, e: ExternalPrices):
     pool_token_in = pool.tokens[token_in]
     pool_token_out = pool.tokens[token_out]
     arb_iterations = []
@@ -94,7 +103,7 @@ def calculate_optimal_trade_size(pool, min_arb_liquidity, max_arb_liquidity, arb
         # sort by biggest profit
         # select biggest profit && profit >= gas cost
 
-        token_amount_in = Decimal(arb_liq_in_external_currency) / external_token_prices[token_in]
+        token_amount_in = Decimal(arb_liq_in_external_currency) / e.external_prices[token_in]
         swap_result = BalancerMath.calc_out_given_in(
             token_balance_in=pool_token_in.balance,
             token_weight_in=Decimal(pool_token_in.denorm_weight),
@@ -103,21 +112,39 @@ def calculate_optimal_trade_size(pool, min_arb_liquidity, max_arb_liquidity, arb
             token_amount_in=token_amount_in,
             swap_fee=pool.swap_fee
         )
-        effective_token_out_price_in_external_currency = (token_amount_in / swap_result.result) * external_token_prices[token_in]
-        effective_token_out_price_gap_to_external_price = external_token_prices[token_out] - effective_token_out_price_in_external_currency
-        profit = effective_token_out_price_gap_to_external_price * swap_result.result - tx_cost_in_external_currency
-        print_if_verbose(f'Used {arb_liq_in_external_currency} {external_currency} to buy {token_amount_in:.4f} {token_in} in external markets (no slippage). Put {token_amount_in:.4f} {token_in}, got {swap_result.result:.4f} {token_out} from pool for an effective price of {effective_token_out_price_in_external_currency:.4f} {external_currency} (diff. between external price and effective price from pool: {effective_token_out_price_gap_to_external_price:.4f}) Profit: {profit:.2f} {external_currency}')
 
-        arb_iterations.append(PotentialArbTradeIteration(
-            liquidity_in=TokenAmount(symbol=external_currency, amount=arb_liq_in_external_currency),
+        evaluation = calculate_profit(
+            liquidity_in=TokenAmount(symbol=e.symbol, amount=arb_liq_in_external_currency),
             token_in=TokenAmount(symbol=token_in, amount=token_amount_in),
             token_out=TokenAmount(symbol=token_out, amount=swap_result.result),
-            effective_token_out_price_in_external_currency=TokenAmount(symbol=external_currency, amount=effective_token_out_price_in_external_currency),
-            effective_token_out_price_gap_to_external_price=TokenAmount(symbol=external_currency, amount=effective_token_out_price_gap_to_external_price),
-            tx_cost_in_external_currency=TokenAmount(symbol=external_currency, amount=tx_cost_in_external_currency),
-            profit=TokenAmount(symbol=external_currency, amount=profit),
-        ))
+            tx_cost_in_external_currency=TokenAmount(symbol=e.symbol, amount=tx_cost_in_external_currency),
+            e=e
+        )
+        arb_iterations.append(evaluation)
+
     return arb_iterations
+
+def calculate_profit(liquidity_in: TokenAmount, token_in: TokenAmount, token_out: TokenAmount, tx_cost_in_external_currency: TokenAmount, e: ExternalPrices):
+    effective_token_out_price_in_external_currency = TokenAmount(
+        amount=(token_in.amount / token_out.amount) * e.external_prices[token_in.symbol],
+        symbol=e.symbol)
+    effective_token_out_price_gap_to_external_price = TokenAmount(
+        amount=e.external_prices[token_out.symbol] - effective_token_out_price_in_external_currency.amount,
+        symbol=e.symbol)
+    profit = TokenAmount(
+        amount=effective_token_out_price_gap_to_external_price.amount * token_out.amount - tx_cost_in_external_currency.amount,
+        symbol=e.symbol)
+    print_if_verbose(f'Used {liquidity_in} to buy {token_in} in external markets (no slippage). Put {token_in}, got {token_out} from pool for an effective price of {effective_token_out_price_in_external_currency} (diff. between external price and effective price from pool: {effective_token_out_price_gap_to_external_price}) Profit: {profit}')
+    a = ArbTradeEvaluation(
+        liquidity_in=liquidity_in,
+        token_in=token_in,
+        token_out=token_out,
+        effective_token_out_price_in_external_currency=effective_token_out_price_in_external_currency,
+        effective_token_out_price_gap_to_external_price=effective_token_out_price_gap_to_external_price,
+        tx_cost_in_external_currency=tx_cost_in_external_currency,
+        profit=profit
+    )
+    return a
 
 def in_external_currency(i: typing.Dict, external_token_prices: typing.Dict) -> typing.Dict:
     """
@@ -172,28 +199,29 @@ def p_arbitrageur(params, substep, history, current_state):
             'pool_update': None}
 
     the_trade = x_spot_price_cheaper_than_external_price[0][0]
-    potential_trades = calculate_optimal_trade_size(pool, params[0]['min_arb_liquidity'], params[0]['max_arb_liquidity'], params[0]['arb_liquidity_granularity'], current_state['gas_cost'], the_trade.token_in, the_trade.token_out, external_currency, external_token_prices)
+    potential_trades = calculate_optimal_trade_size(pool, params[0]['min_arb_liquidity'], params[0]['max_arb_liquidity'], params[0]['arb_liquidity_granularity'], current_state['gas_cost'], the_trade.token_in, the_trade.token_out, ExternalPrices(symbol=external_currency, external_prices=external_token_prices))
     potential_trades = sorted(potential_trades, key=attrgetter('profit'), reverse=True)
-    if not len(potential_trades):
+
+    # Filter out trades raising security exceptions in Pool
+    potential_trades = list(filter(lambda trade: trade.token_in.amount < pool.tokens[trade.token_in.symbol].balance * MAX_IN_RATIO, potential_trades))
+    # pp(potential_trades)
+    most_profitable_trade = potential_trades[0]
+
+    if most_profitable_trade.profit.amount < 2 * current_state['gas_cost']:
         print_if_verbose('no trade')
         return {'external_price_update': None, 'change_datetime_update': None, 'action_type': None,
             'pool_update': None}
 
-    # Filter out profit < transaction cost; trades raising security exceptions in pool
-    potential_trades = list(filter(lambda trade: trade.profit > trade.transaction_cost, potential_trades))
-    potential_trades = list(filter(lambda trade: trade.token_amount_in < pool.tokens[trade.token_in].balance * MAX_IN_RATIO, potential_trades))
-    # pp(potential_trades)
-    most_profitable_trade = potential_trades[0]
-    print_if_verbose(f'most_profitable_trade: {most_profitable_trade.token_amount_in:.3f} {most_profitable_trade.token_in} -> {most_profitable_trade.token_amount_out:.3f} {most_profitable_trade.token_out}, profit {most_profitable_trade.profit:.3f} {external_currency}')
+    print_if_verbose(f'most_profitable_trade: {most_profitable_trade}')
     swap_input = SwapExactAmountInInput(token_in=TokenAmount(
-        symbol=most_profitable_trade.token_in,
-        amount=most_profitable_trade.token_amount_in
+        symbol=most_profitable_trade.token_in.symbol,
+        amount=most_profitable_trade.token_in.amount
     ), min_token_out=TokenAmount(
-        symbol=most_profitable_trade.token_out,
+        symbol=most_profitable_trade.token_out.symbol,
         amount=Decimal('0')
     ))
 
-    swap_output = SwapExactAmountInOutput(token_out=TokenAmount(amount=most_profitable_trade.token_amount_out, symbol=most_profitable_trade.token_out))
+    swap_output = SwapExactAmountInOutput(token_out=most_profitable_trade.token_out)
     print_if_verbose(swap_input, swap_output)
     # add 15 seconds, more or less next block
     action_datetime = current_state['change_datetime'] + timedelta(0, 15)

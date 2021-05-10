@@ -13,7 +13,7 @@ class TokenAmount:
         return TokenAmount(symbol=token_dict['symbol'], amount=Decimal(token_dict['amount']))
 
     def __repr__(self):
-        return f'{self.amount:.5f}... {self.symbol}'
+        return f'{self.amount} {self.symbol}'
 
     def __mul__(self, other):
         if not isinstance(other, TokenAmount):
