@@ -117,7 +117,7 @@ def calculate_optimal_trade_size(pool, min_arb_liquidity, max_arb_liquidity, arb
             liquidity_in=TokenAmount(symbol=e.symbol, amount=arb_liq_in_external_currency),
             token_in=TokenAmount(symbol=token_in, amount=token_amount_in),
             token_out=TokenAmount(symbol=token_out, amount=swap_result.result),
-            tx_cost_in_external_currency=TokenAmount(symbol=e.symbol, amount=tx_cost_in_external_currency),
+            tx_cost_in_external_currency=tx_cost_in_external_currency,
             e=e
         )
         arb_iterations.append(evaluation)
@@ -199,7 +199,7 @@ def p_arbitrageur(params, substep, history, current_state):
             'pool_update': None}
 
     the_trade = x_spot_price_cheaper_than_external_price[0][0]
-    potential_trades = calculate_optimal_trade_size(pool, params[0]['min_arb_liquidity'], params[0]['max_arb_liquidity'], params[0]['arb_liquidity_granularity'], current_state['gas_cost'], the_trade.token_in, the_trade.token_out, ExternalPrices(symbol=external_currency, external_prices=external_token_prices))
+    potential_trades = calculate_optimal_trade_size(pool, params[0]['min_arb_liquidity'], params[0]['max_arb_liquidity'], params[0]['arb_liquidity_granularity'], current_state['tx_cost'], the_trade.token_in, the_trade.token_out, ExternalPrices(symbol=external_currency, external_prices=external_token_prices))
     potential_trades = sorted(potential_trades, key=attrgetter('profit'), reverse=True)
 
     # Filter out trades raising security exceptions in Pool
@@ -207,7 +207,7 @@ def p_arbitrageur(params, substep, history, current_state):
     # pp(potential_trades)
     most_profitable_trade = potential_trades[0]
 
-    if most_profitable_trade.profit.amount < 2 * current_state['gas_cost']:
+    if most_profitable_trade.profit.amount < 2 * current_state['tx_cost'].amount:
         print_if_verbose('no trade')
         return {'external_price_update': None, 'change_datetime_update': None, 'action_type': None,
             'pool_update': None}

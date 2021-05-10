@@ -31,14 +31,14 @@ def generate_initial_state(initial_values_json: str, spot_price_base_currency: s
 #                            pool_shares: Decimal,
 #                            spot_price_base_currency: str,
 #                            token_prices: dict,
-#                            gas_cost: Decimal) -> typing.Dict:
+#                            tx_cost: TokenAmount) -> typing.Dict:
 #     initial_values = {}
 #     # Figure out the tokens that are NOT the spot_price_base_currency
 #     pool = create_pool(token_symbols=token_symbols, tokens=tokens, swap_fee=swap_fee, pool_shares=pool_shares)
 #     initial_values["pool"] = pool
 #     spot_prices = calculate_spot_prices(pool, ref_token=spot_price_base_currency)
 #     initial_values["spot_prices"] = spot_prices
-#     initial_values["gas_cost"] = gas_cost
+#     initial_values["tx_cost"] = tx_cost
 #     if set(token_prices.keys()) != set(token_symbols):
 #         raise Exception('unexpected token prices')
 #     initial_values["token_prices"] = token_prices
