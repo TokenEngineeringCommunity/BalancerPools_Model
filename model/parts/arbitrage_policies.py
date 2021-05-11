@@ -134,7 +134,7 @@ def calculate_profit(liquidity_in: TokenAmount, token_in: TokenAmount, token_out
     profit = TokenAmount(
         amount=effective_token_out_price_gap_to_external_price.amount * token_out.amount - tx_cost_in_external_currency.amount,
         symbol=e.symbol)
-    print_if_verbose(f'Used {liquidity_in} to buy {token_in} in external markets (no slippage). Put {token_in}, got {token_out} from pool for an effective price of {effective_token_out_price_in_external_currency} (diff. between external price and effective price from pool: {effective_token_out_price_gap_to_external_price}) Profit: {profit}')
+    # print(f'Used {liquidity_in} to buy {token_in} in external markets (no slippage). Put {token_in}, got {token_out} from pool for an effective price of {effective_token_out_price_in_external_currency} (diff. between external price and effective price from pool: {effective_token_out_price_gap_to_external_price}) Profit: {profit}')
     a = ArbTradeEvaluation(
         liquidity_in=liquidity_in,
         token_in=token_in,
@@ -208,7 +208,7 @@ def p_arbitrageur(params, substep, history, current_state):
     most_profitable_trade = potential_trades[0]
 
     if most_profitable_trade.profit.amount < 2 * current_state['tx_cost'].amount:
-        print_if_verbose('no trade')
+        print_if_verbose(f'Could not find a trade that made more profit than 2 * {current_state["tx_cost"]}, aborting')
         return {'external_price_update': None, 'change_datetime_update': None, 'action_type': None,
             'pool_update': None}
 
