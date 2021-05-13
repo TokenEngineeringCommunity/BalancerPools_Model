@@ -1,0 +1,47 @@
+{
+    "pool": {
+        "__type__": "Pool",
+        "tokens": {
+            "AAVE": {
+                "__type__": "Token",
+                "denorm_weight": "12",
+                "balance": "1000",
+                "bound": true
+            },
+            "SNX": {
+                "__type__": "Token",
+                "denorm_weight": "10",
+                "balance": "11024",
+                "bound": true
+            },
+            "SUSHI": {
+                "__type__": "Token",
+                "denorm_weight": "6",
+                "balance": "13781",
+                "bound": true
+            },
+            "YFI": {
+                "__type__": "Token",
+                "denorm_weight": "12",
+                "balance": "5.969",
+                "bound": true
+            }
+        },
+        "generated_fees": {
+            "AAVE": "0.0",
+            "SNX": "0.0",
+            "SUSHI": "0.0",
+            "YFI": "0.0"
+        },
+        "pool_shares": "100",
+        "swap_fee": "0.0015"
+    },
+    "action_type": "pool_creation",
+    "change_datetime": "2021-01-01T05:20:00+00:00",
+    "token_prices": {
+        "AAVE": 176.6995,
+        "SNX": 13.309999999999999,
+        "SUSHI": 6.395,
+        "YFI": 29591.77
+    }
+}
