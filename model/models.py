@@ -22,7 +22,7 @@ class Token:
         self.bound = bound
 
     def __repr__(self):
-        return "<Token weight: {} (calculated), denorm_weight: {}, balance: {}, bound: {}>".format(self.weight, self.denorm_weight, self.balance,
+        return "<Token denorm_weight: {}, balance: {}, bound: {}>".format(self.denorm_weight, self.balance,
                                                                                                    self.bound)
 
     def __eq__(self, other):
@@ -42,21 +42,15 @@ class Token:
     def balance(self, value):
         self.__dict__['balance'] = ensure_type(value, Decimal)
 
-    @property
-    def weight(self):
-        return self.denorm_weight / MAX_TOTAL_WEIGHT
 
 
 class Pool:
-    def __init__(self, tokens: typing.Dict, generated_fees: typing.Dict, shares: Decimal, swap_fee: Decimal):
+    def __init__(self, tokens: typing.Dict, generated_fees: typing.Dict, shares: Decimal, swap_fee: Decimal, denorm_weight_constant = 40):
         self.tokens = tokens
         self.generated_fees = generated_fees
         self.shares = Decimal(shares)
         self.swap_fee = Decimal(swap_fee)
-
-    # @staticmethod
-    # def fromJSON(path: str):
-    #     with open(path, "r") as f:
+        self.denorm_weight_constant = denorm_weight_constant
 
     def toJSON(self):
         return json.dumps(self.as_dict())
@@ -74,13 +68,13 @@ class Pool:
         for ref in ref_tokens:
             spot_prices[ref] = {}
             balance_in = self.tokens[ref].balance
-            weight_in = self.tokens[ref].weight
+            weight_in = self.tokens[ref].denorm_weight / self.denorm_weight_constant
 
             for token in self.tokens:
                 if token == ref:
                     continue
                 balance_out = self.tokens[token].balance
-                weight_out = self.tokens[token].weight
+                weight_out = self.tokens[token].denorm_weight / self.denorm_weight_constant
 
                 price = BalancerMath.calc_spot_price(token_balance_in=Decimal(balance_in),
                                                      token_weight_in=Decimal(weight_in),
@@ -194,4 +188,6 @@ class Pool:
         self.__dict__['swap_fee'] = ensure_type(value, Decimal)
 
     def __repr__(self):
-        return f"<Pool tokens: {self.tokens} generated_fees: {self.generated_fees} shares: {self.shares} swap_fee: {self.swap_fee} >"
+        token_reprs = [f'{{ {symbol}: {token.balance}, weight: {token.denorm_weight / self.denorm_weight_constant }, bound: {token.bound} }}' for symbol, token in self.tokens.items()]
+        token_repr = " ".join(token_reprs)
+        return f"<Pool tokens: {token_repr} generated_fees: {self.generated_fees} shares: {self.shares} swap_fee: {self.swap_fee} >"
