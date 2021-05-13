@@ -4,7 +4,6 @@ Model parameters.
 import typing
 import json
 from decimal import Decimal
-# These are the initial conditions of the DAI-ETH Uniswap instance - https://etherscan.io/address/0x09cabEC1eAd1c0Ba254B09efb3EE13841712bE14
 
 from model.parts.balancer_math import BalancerMath
 from model.models import Token, Pool
@@ -21,26 +20,8 @@ def generate_initial_state(initial_values_json: str, spot_price_base_currency: s
     with open(initial_values_json, "r") as f:
         initial_values = json.load(f, object_hook=customtypes_hook)
 
-    initial_values["spot_prices"] = initial_values['pool'].spot_prices(ref_token=spot_price_base_currency)
+    pool = initial_values['pool']
+    spot_prices = {t: pool.spot_prices(t)[t] for t in pool.tokens}
+    initial_values["spot_prices"] = spot_prices
+
     return initial_values
-
-
-# def generate_initial_state(token_symbols: typing.List[str],
-#                            tokens: typing.List[Token],
-#                            swap_fee: Decimal,
-#                            pool_shares: Decimal,
-#                            spot_price_base_currency: str,
-#                            token_prices: dict,
-#                            tx_cost: TokenAmount) -> typing.Dict:
-#     initial_values = {}
-#     # Figure out the tokens that are NOT the spot_price_base_currency
-#     pool = create_pool(token_symbols=token_symbols, tokens=tokens, swap_fee=swap_fee, pool_shares=pool_shares)
-#     initial_values["pool"] = pool
-#     spot_prices = calculate_spot_prices(pool, ref_token=spot_price_base_currency)
-#     initial_values["spot_prices"] = spot_prices
-#     initial_values["tx_cost"] = tx_cost
-#     if set(token_prices.keys()) != set(token_symbols):
-#         raise Exception('unexpected token prices')
-#     initial_values["token_prices"] = token_prices
-#     initial_values["action_type"] = "pool_creation"
-#     return initial_values
