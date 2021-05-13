@@ -10,6 +10,7 @@ from attr import dataclass
 from model.parts.balancer_constants import MAX_IN_RATIO
 from model.parts.balancer_math import BalancerMath
 from model.parts.pool_method_entities import SwapExactAmountInInput, SwapExactAmountInOutput, TokenAmount
+from model.parts.utils import get_param
 
 MAX_DECIMAL = Context(Emax=MAX_EMAX, prec=1).create_decimal('9e' + str(MAX_EMAX))
 VERBOSE = True
@@ -184,7 +185,10 @@ def find_largest_spot_price_external_price_gap(tokens: typing.List, oracle: Pric
 def p_arbitrageur(params, substep, history, current_state):
     pool = current_state['pool']
     spot_prices = current_state['spot_prices']
-    external_currency = params[0]['external_currency']
+    external_currency = get_param(params, 'external_currency')
+    min_arb_liquidity = get_param(params, 'min_arb_liquidity')
+    max_arb_liquidity = get_param(params, 'max_arb_liquidity')
+    arb_liquidity_granularity = get_param(params, 'arb_liquidity_granularity')
     print_if_verbose('============================================')
     print_if_verbose("Timestep", current_state['timestep'], pool)
     external_token_prices = dict((k, Decimal(v)) for k, v in current_state['token_prices'].items())
@@ -199,7 +203,7 @@ def p_arbitrageur(params, substep, history, current_state):
             'pool_update': None}
 
     the_trade = x_spot_price_cheaper_than_external_price[0][0]
-    potential_trades = calculate_optimal_trade_size(pool, params[0]['min_arb_liquidity'], params[0]['max_arb_liquidity'], params[0]['arb_liquidity_granularity'], current_state['tx_cost'], the_trade.token_in, the_trade.token_out, ExternalPrices(symbol=external_currency, external_prices=external_token_prices))
+    potential_trades = calculate_optimal_trade_size(pool, min_arb_liquidity, max_arb_liquidity, arb_liquidity_granularity, current_state['tx_cost'], the_trade.token_in, the_trade.token_out, ExternalPrices(symbol=external_currency, external_prices=external_token_prices))
     potential_trades = sorted(potential_trades, key=attrgetter('profit'), reverse=True)
 
     # Filter out trades raising security exceptions in Pool
