@@ -10,14 +10,14 @@ def get_param(params: typing.Dict, key: str):
         # Parameter sweep
         return params[key]
 
-def unpack_column_tokens(column_tokens: pd.Series, token_symbols: typing.List[str]) -> pd.DataFrame:
+def unpack_column_tokens(column_tokens: pd.Series, token_symbols: typing.List[str], pool_denorm_weight_constant: int) -> pd.DataFrame:
     di = {}
     for symbol in token_symbols:
         di[f'token_{symbol}_balance'] = []
         di[f'token_{symbol}_denorm_weight'] = []
         di[f'token_{symbol}_weight'] = []
         for r in column_tokens:
-            di[f'token_{symbol}_weight'].append(r[symbol.upper()].weight)
+            di[f'token_{symbol}_weight'].append(r[symbol.upper()].denorm_weight / pool_denorm_weight_constant)
             di[f'token_{symbol}_denorm_weight'].append(r[symbol.upper()].denorm_weight)
             di[f'token_{symbol}_balance'].append(r[symbol.upper()].balance)
     return pd.DataFrame.from_dict(di).astype('float64')
@@ -45,6 +45,7 @@ def unpack_column_pool(df: pd.DataFrame) -> pd.DataFrame:
     # the line above) because postprocessing was written back when pool the
     # state variable was a dict
     list_of_pool_objs = df["pool"].to_list()
+    pool_denorm_weight_constant = list_of_pool_objs[0].denorm_weight_constant
     list_of_pool_dicts = [p.as_dict() for p in list_of_pool_objs]
     column_pool = pd.DataFrame.from_records(list_of_pool_dicts)
 
@@ -52,7 +53,7 @@ def unpack_column_pool(df: pd.DataFrame) -> pd.DataFrame:
     column_shares = unpack_column_shares(column_shares)
 
     column_tokens = column_pool["tokens"]
-    column_tokens_unpacked = unpack_column_tokens(column_tokens, token_symbols)
+    column_tokens_unpacked = unpack_column_tokens(column_tokens, token_symbols, pool_denorm_weight_constant)
 
 
     column_fees = column_pool['generated_fees']
