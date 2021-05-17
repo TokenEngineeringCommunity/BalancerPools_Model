@@ -4,6 +4,7 @@ import pandas as pd
 from pandas._testing import assert_frame_equal
 
 from model.parts.utils import *
+from data.utils import load_pickle
 
 
 class TestUtils(unittest.TestCase):
@@ -44,6 +45,13 @@ class TestUtils(unittest.TestCase):
 
         assert_frame_equal(result, expected_df)
 
+    def test_post_processing_harness(self):
+        """
+        This is simply a harness to run postprocessing, doesn't test for anything
+        """
+        df = load_pickle("NB3.pickle")
+        p_df = post_processing(df)
+        print("END")
 
 if __name__ == '__main__':
     unittest.main()
