@@ -147,4 +147,10 @@ def post_processing(df: pd.DataFrame, include_spot_prices=False) -> pd.DataFrame
     # Convert generated_fees_(token) columns from str or Decimal to float64
     generated_fees_columns = [f'generated_fees_{s}' for s in symbols]
     for generated_fee_col in generated_fees_columns: df[generated_fee_col] = df[generated_fee_col].astype('float64')
+
+    # Unpack ArbTradeEvaluation, get its revenue and profits
+    revenue = [trade.revenue.amount if bool(trade) else 0 for trade in df.arbitrageur_trade]
+    profits = [trade.profit.amount if bool(trade) else 0 for trade in df.arbitrageur_trade]
+    df = df.assign(arbitrageur_revenue=revenue)
+    df = df.assign(arbitrageur_profit=profits)
     return df

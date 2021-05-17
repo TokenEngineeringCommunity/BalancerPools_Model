@@ -43,6 +43,7 @@ class ArbTradeEvaluation:
     effective_token_out_price_in_external_currency: TokenAmount
     effective_token_out_price_gap_to_external_price: TokenAmount
     tx_cost_in_external_currency: TokenAmount
+    revenue: TokenAmount
     profit: TokenAmount
 
 @dataclass
@@ -132,6 +133,7 @@ def calculate_profit(liquidity_in: TokenAmount, token_in: TokenAmount, token_out
     effective_token_out_price_gap_to_external_price = TokenAmount(
         amount=e.external_prices[token_out.symbol] - effective_token_out_price_in_external_currency.amount,
         symbol=e.symbol)
+    revenue =TokenAmount(amount=effective_token_out_price_gap_to_external_price.amount * token_out.amount,symbol=e.symbol)
     profit = TokenAmount(
         amount=effective_token_out_price_gap_to_external_price.amount * token_out.amount - tx_cost_in_external_currency.amount,
         symbol=e.symbol)
@@ -143,6 +145,7 @@ def calculate_profit(liquidity_in: TokenAmount, token_in: TokenAmount, token_out
         effective_token_out_price_in_external_currency=effective_token_out_price_in_external_currency,
         effective_token_out_price_gap_to_external_price=effective_token_out_price_gap_to_external_price,
         tx_cost_in_external_currency=tx_cost_in_external_currency,
+        revenue=revenue,
         profit=profit
     )
     return a
@@ -233,4 +236,5 @@ def p_arbitrageur(params, substep, history, current_state):
         'pool_update': (swap_input, swap_output),
         'change_datetime_update': pd.Timestamp(action_datetime.isoformat()),
         'action_type': 'swap',
+        'arbitrageur_trade': most_profitable_trade
     }

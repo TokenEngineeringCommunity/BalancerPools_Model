@@ -20,6 +20,20 @@ class TokenAmount:
             raise ValueError("Other must be a TokenAmount as well")
         amount_new = self.amount * other.amount
         return TokenAmount(symbol=other.symbol, amount=amount_new)
+
+    def __add__(self, other):
+        if not isinstance(other, TokenAmount):
+            raise ValueError("Other must be a TokenAmount as well")
+        if other.symbol != self.symbol:
+            raise ValueError("You really shouldn't add a {} and {} together".format(self.symbol, other.symbol))
+        amount_new = self.amount + other.amount
+        return TokenAmount(symbol=self.symbol, amount=amount_new)
+
+    def __radd__(self, other):
+        if other == 0:
+            return self
+        else:
+            return self.__add__(other)
 @dataclass
 class JoinParamsInput:
     pool_amount_out: Decimal
