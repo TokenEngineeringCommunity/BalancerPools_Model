@@ -131,6 +131,9 @@ def post_processing(df: pd.DataFrame, include_spot_prices=False) -> pd.DataFrame
     column_tvl = df[token_value_columns].sum(axis=1)
     df = df.assign(tvl=column_tvl)
 
+    # Calculate TVL/pool shares (price of pool token)
+    df = df.assign(share_price=df.tvl / df.shares)
+
     # Calculate Invariant column
     df['invariant'] = 1
     for s in symbols:
