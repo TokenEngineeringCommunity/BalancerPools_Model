@@ -1,8 +1,10 @@
-import ipdb
 import copy
 from decimal import Decimal
 
+import ipdb
+
 from model.models import Pool
+from model.parts.arbitrage_policies import print_if_verbose
 from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
                                             MAX_OUT_RATIO)
 from model.parts.balancer_math import BalancerMath
@@ -42,33 +44,37 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
 
 def powerpool_linear_weight_change(state_update_function):
     def wrapped_state_update_function(*args, **kwargs):
+        previous_state = args[3]
         pool_opcode_in = args[4]
         pool_opcode_out = args[5]
-        pool = state_update_function(*args, **kwargs)
         if type(pool_opcode_in) is SwapExactAmountInInput and type(pool_opcode_out) is SwapExactAmountInOutput:
-            print("swap: will change weight", end='|')
+            print("swap: will change weight")
             token_in = pool_opcode_in.token_in
             token_out = pool_opcode_out.token_out
+            pool = previous_state['pool']
 
-            swap_size_proportion = token_in.amount / pool.tokens[token_in.symbol].balance
-            print(token_in, "has a size of", swap_size_proportion, end='|')
-            if swap_size_proportion > 1:
-                raise Exception("WEIGHT CHANGE ERROR: swap amount being way larger than pool balance messes up the weight changing strategy")
+            balances_before = copy.deepcopy(pool.tokens)
 
-            weight_increase_factor = Decimal(1) + Decimal(swap_size_proportion)
-            weight_decrease_factor = Decimal(1) - Decimal(swap_size_proportion)
-            pool_token_in = pool.tokens[token_in.symbol]
-            print("Multiplying {}.denorm_weight by {}".format(token_in.symbol, weight_decrease_factor), end='|')
-            pool_token_in_new_denorm_weight = pool_token_in.denorm_weight * weight_decrease_factor
-            pool.change_weight(token_in.symbol, pool_token_in_new_denorm_weight)
+            pool = state_update_function(*args, **kwargs)
 
-            pool_token_out = pool.tokens[token_out.symbol]
-            print("Multiplying {}.denorm_weight by {}".format(token_out.symbol, weight_increase_factor))
-            pool_token_out_new_denorm_weight = pool_token_out.denorm_weight * weight_increase_factor
-            pool.change_weight(token_out.symbol, pool_token_out_new_denorm_weight)
+            balances_after = pool.tokens
+
+            token_in_delta = (balances_after[token_in.symbol].balance - balances_before[token_in.symbol].balance) / balances_before[token_in.symbol].balance
+            token_out_delta = (balances_after[token_out.symbol].balance - balances_before[token_out.symbol].balance) / balances_before[token_out.symbol].balance
+
+            new_weight_token_out = pool.tokens[token_out.symbol].denorm_weight * (1 - token_out_delta)
+            new_weight_delta = pool.tokens[token_out.symbol].denorm_weight - new_weight_token_out
+            new_weight_token_in = pool.tokens[token_in.symbol].denorm_weight + new_weight_delta
+
+            print_if_verbose(f'{token_in.symbol}: weight change {pool.tokens[token_in.symbol].denorm_weight:.5f} -> {new_weight_token_in:.5f} balance change {balances_before[token_in.symbol].balance:.5f} -> {balances_after[token_in.symbol].balance:.5f}')
+            print_if_verbose(f'{token_out.symbol}: weight change {pool.tokens[token_out.symbol].denorm_weight:.5f} -> {new_weight_token_out:.5f} balance change {balances_before[token_out.symbol].balance:.5f} -> {balances_after[token_out.symbol].balance:.5f}')
+            import ipdb; ipdb.set_trace()
+
+            pool.change_weight(token_out.symbol, new_weight_token_out)
+            pool.change_weight(token_in.symbol, new_weight_token_in)
 
         elif type(pool_opcode_in) is SwapExactAmountOutInput:
-            pass
+            print("SwapExactAmountOut is not implemented yet")
         elif type(pool_opcode_in) in [JoinSwapExternAmountInInput, JoinSwapPoolAmountOutInput]:
             print("joinswap: won't change weight for now")
         elif type(pool_opcode_in) in [ExitSwapPoolExternAmountOutInput]:
