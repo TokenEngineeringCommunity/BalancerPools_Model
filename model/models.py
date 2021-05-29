@@ -2,6 +2,7 @@ import json
 import copy
 import typing
 from decimal import Decimal
+from operator import itemgetter
 from model.parts.balancer_math import BalancerMath
 from model.parts.balancer_constants import (EXIT_FEE, MAX_IN_RATIO,
                                             MAX_OUT_RATIO, MAX_BOUND_TOKENS, MIN_BALANCE, MIN_WEIGHT, MAX_WEIGHT, MAX_TOTAL_WEIGHT)
@@ -118,10 +119,21 @@ class Pool:
             ans[t] = self.tokens[t].balance
         return ans
 
-    def change_weight(self, token_symbol: str, new_denorm_weight: Decimal) -> Decimal:
-        token_weight_to_be_changed = copy.deepcopy(self.tokens[token_symbol])
-        token_weight_to_be_changed.denorm_weight = new_denorm_weight
-        return self._rebind(token_symbol, token_weight_to_be_changed)
+    def change_weight(self, token_1_symbol: str, token_1_old_denorm_weight: Decimal, token_1_new_denorm_weight: Decimal, token_2_symbol: str, token_2_old_denorm_weight: Decimal, token_2_new_denorm_weight: Decimal):
+        """
+        Change weights of multiple tokens at once, taking care to decrease
+        weights first. Why? Because if we're at MAX_TOTAL_DENORM_WEIGHT = 50
+        already, if we change a token's weight to be larger, _rebind() will
+        throw an exception.
+        """
+        initial_token_state = copy.deepcopy(self.tokens)
+        ch = [(token_1_symbol, token_1_new_denorm_weight - token_1_old_denorm_weight, token_1_new_denorm_weight), (token_2_symbol, token_2_new_denorm_weight - token_2_old_denorm_weight, token_2_new_denorm_weight)]
+        chs = sorted(ch, key=itemgetter(1))
+        for t in chs:
+            symbol = t[0]
+            new_weight = t[2]
+            initial_token_state[symbol].denorm_weight = new_weight
+            self._rebind(t[0], initial_token_state[symbol])
 
     def _bind(self, token_symbol: str, token: Token) -> Decimal:
         if self.tokens.get(token_symbol) is not None and self.tokens.get(token_symbol).bound is True:

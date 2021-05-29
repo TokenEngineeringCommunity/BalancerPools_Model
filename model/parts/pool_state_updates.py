@@ -36,19 +36,17 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
         pool_operation_suf = pool_operation_mappings[type(pool_opcodes[0])]
 
     if get_param(params, 'weight_changing'):
-        print("Gonna enable powerpool linear weight change after each swap")
-        pool_operation_suf = powerpool_linear_weight_change(pool_operation_suf)
+        pool_operation_suf = powerpool_change_weight_after_swaps(pool_operation_suf)
 
     pool = pool_operation_suf(params, substep, state_history, previous_state, pool_opcodes[0], pool_opcodes[1])
     return 'pool', pool
 
-def powerpool_linear_weight_change(state_update_function):
+def powerpool_change_weight_after_swaps(state_update_function):
     def wrapped_state_update_function(*args, **kwargs):
         previous_state = args[3]
         pool_opcode_in = args[4]
         pool_opcode_out = args[5]
         if type(pool_opcode_in) is SwapExactAmountInInput and type(pool_opcode_out) is SwapExactAmountInOutput:
-            print("swap: will change weight")
             token_in = pool_opcode_in.token_in
             token_out = pool_opcode_out.token_out
             pool = previous_state['pool']
@@ -66,13 +64,10 @@ def powerpool_linear_weight_change(state_update_function):
             new_weight_delta = pool.tokens[token_out.symbol].denorm_weight - new_weight_token_out
             new_weight_token_in = pool.tokens[token_in.symbol].denorm_weight + new_weight_delta
 
-            print_if_verbose(f'{token_in.symbol}: weight change {pool.tokens[token_in.symbol].denorm_weight:.5f} -> {new_weight_token_in:.5f} balance change {balances_before[token_in.symbol].balance:.5f} -> {balances_after[token_in.symbol].balance:.5f}')
-            print_if_verbose(f'{token_out.symbol}: weight change {pool.tokens[token_out.symbol].denorm_weight:.5f} -> {new_weight_token_out:.5f} balance change {balances_before[token_out.symbol].balance:.5f} -> {balances_after[token_out.symbol].balance:.5f}')
-            import ipdb; ipdb.set_trace()
+            print_if_verbose(f'IN: {token_in.symbol}: weight change {pool.tokens[token_in.symbol].denorm_weight} -> {new_weight_token_in}, delta {token_in_delta}, balance change {balances_before[token_in.symbol].balance} -> {balances_after[token_in.symbol].balance}')
+            print_if_verbose(f'OUT: {token_out.symbol}: weight change {pool.tokens[token_out.symbol].denorm_weight} -> {new_weight_token_out} delta {token_out_delta}, balance change {balances_before[token_out.symbol].balance} -> {balances_after[token_out.symbol].balance}')
 
-            pool.change_weight(token_out.symbol, new_weight_token_out)
-            pool.change_weight(token_in.symbol, new_weight_token_in)
-
+            pool.change_weight(token_in.symbol, pool.tokens[token_in.symbol].denorm_weight, new_weight_token_in, token_out.symbol, pool.tokens[token_out.symbol].denorm_weight, new_weight_token_out)
         elif type(pool_opcode_in) is SwapExactAmountOutInput:
             print("SwapExactAmountOut is not implemented yet")
         elif type(pool_opcode_in) in [JoinSwapExternAmountInInput, JoinSwapPoolAmountOutInput]:
