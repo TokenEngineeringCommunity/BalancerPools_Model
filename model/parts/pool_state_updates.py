@@ -36,12 +36,15 @@ def s_update_pool(params, substep, state_history, previous_state, policy_input):
         pool_operation_suf = pool_operation_mappings[type(pool_opcodes[0])]
 
     if get_param(params, 'weight_changing'):
-        pool_operation_suf = powerpool_change_weight_after_swaps(pool_operation_suf)
+        pool_operation_suf = powerpool_weightchange_delta(pool_operation_suf)
 
     pool = pool_operation_suf(params, substep, state_history, previous_state, pool_opcodes[0], pool_opcodes[1])
     return 'pool', pool
 
-def powerpool_change_weight_after_swaps(state_update_function):
+def powerpool_weightchange_delta(state_update_function):
+    """
+    Changes weights based on deltas after each swap event (only implemented for swapExactAmountIn)
+    """
     def wrapped_state_update_function(*args, **kwargs):
         previous_state = args[3]
         pool_opcode_in = args[4]

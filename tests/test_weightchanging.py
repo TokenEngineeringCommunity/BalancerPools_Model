@@ -5,11 +5,11 @@ import copy
 
 from model.models import Pool, Token
 from model.parts.pool_method_entities import TokenAmount, SwapExactAmountInInput, SwapExactAmountInOutput
-from model.parts.pool_state_updates import powerpool_change_weight_after_swaps, s_swap_exact_amount_in
+from model.parts.pool_state_updates import powerpool_weightchange_delta, powerpool_new_strategy, s_swap_exact_amount_in
 
 
 """
-This test harness helps in developing powerpool_change_weight_after_swaps() without
+This test harness helps in developing powerpool_weightchange_delta() without
 relying on historical data to drive the simulation.
 """
 class TestWeightChange(unittest.TestCase):
@@ -20,7 +20,7 @@ class TestWeightChange(unittest.TestCase):
             'weight_changing': [True],
         }
 
-    def test_swap(self):
+    def test_delta(self):
         dai586 = TokenAmount(symbol='DAI', amount=Decimal(586.651036))
         weth1 = TokenAmount(symbol='WETH', amount=Decimal(1))
         trade1 = (SwapExactAmountInInput(token_in=weth1, min_token_out=dai586), SwapExactAmountInOutput(token_out=dai586))
@@ -40,7 +40,7 @@ class TestWeightChange(unittest.TestCase):
             # 'token_prices': {'DAI': 1, 'WETH': 599}
         }
 
-        w_s_swap_exact_amount_in = powerpool_change_weight_after_swaps(s_swap_exact_amount_in)
+        w_s_swap_exact_amount_in = powerpool_weightchange_delta(s_swap_exact_amount_in)
         pool1 = w_s_swap_exact_amount_in(self.params, 1, [], state1, trade1[0], trade1[1])
 
         self.assertEqual(pool1.tokens['DAI'].denorm_weight, Decimal('10.05866510360452269575162233'))
