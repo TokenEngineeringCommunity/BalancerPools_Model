@@ -13,7 +13,7 @@ from model.parts.pool_method_entities import SwapExactAmountInInput, SwapExactAm
 from model.parts.utils import get_param
 
 MAX_DECIMAL = Context(Emax=MAX_EMAX, prec=1).create_decimal('9e' + str(MAX_EMAX))
-VERBOSE = True
+VERBOSE = False
 
 
 def print_if_verbose(text: any, *args):
