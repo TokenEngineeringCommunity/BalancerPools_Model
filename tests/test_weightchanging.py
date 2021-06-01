@@ -5,7 +5,7 @@ import copy
 
 from model.models import Pool, Token
 from model.parts.pool_method_entities import TokenAmount, SwapExactAmountInInput, SwapExactAmountInOutput
-from model.parts.pool_state_updates import powerpool_weightchange_delta, powerpool_new_strategy, s_swap_exact_amount_in
+from model.parts.pool_state_updates import powerpool_weightchange_delta, s_swap_exact_amount_in
 
 
 """
